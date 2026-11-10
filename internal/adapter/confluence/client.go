@@ -18,7 +18,7 @@ const defaultMaxAttempts = 4
 
 // Options は Client の生成パラメーター。Root はサイトの root で、/wiki を含まない。
 // HTTP・Sleep・MaxAttempts は省略するとそれぞれ既定値（タイムアウト 30 秒の http.Client、
-// time.Sleep、4 回）になる。Sleep はテストでリトライの待機を差し替えるために公開している。
+// ctx のキャンセルで中断する待機、4 回）になる。Sleep はテストでリトライの待機を差し替えるために公開している。
 type Options struct {
 	Root        string
 	Email       string
@@ -33,7 +33,7 @@ type Client struct {
 	email       string
 	token       string
 	http        *http.Client
-	sleep       func(time.Duration)
+	sleep       func(context.Context, time.Duration)
 	maxAttempts int
 }
 
@@ -43,19 +43,31 @@ func New(o Options) *Client {
 		email:       o.Email,
 		token:       o.Token,
 		http:        o.HTTP,
-		sleep:       o.Sleep,
 		maxAttempts: o.MaxAttempts,
 	}
 	if c.http == nil {
 		c.http = &http.Client{Timeout: 30 * time.Second}
 	}
-	if c.sleep == nil {
-		c.sleep = time.Sleep
+	if o.Sleep != nil {
+		sleep := o.Sleep
+		c.sleep = func(_ context.Context, d time.Duration) { sleep(d) }
+	} else {
+		c.sleep = sleepContext
 	}
 	if c.maxAttempts <= 0 {
 		c.maxAttempts = defaultMaxAttempts
 	}
 	return c
+}
+
+// sleepContext は d だけ待つ。ctx がキャンセルされたら、待機の残りを待たずに戻る。
+func sleepContext(ctx context.Context, d time.Duration) {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+	case <-ctx.Done():
+	}
 }
 
 // endpoint は 1 つの API 操作。scopes はエラーの Hint に表示する、操作に必要な OAuth スコープ。
@@ -120,7 +132,7 @@ func (c *Client) do(ctx context.Context, ep endpoint, q url.Values, in, out any)
 		}
 
 		if attempt < c.maxAttempts && retryable(ep.method, resp.StatusCode) {
-			c.sleep(retryDelay(resp.Header.Get("Retry-After"), attempt, time.Now()))
+			c.sleep(ctx, retryDelay(resp.Header.Get("Retry-After"), attempt, time.Now()))
 			continue
 		}
 		return nil, apiError(ep, resp.StatusCode, data)

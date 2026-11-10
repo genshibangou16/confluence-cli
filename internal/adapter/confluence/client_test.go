@@ -3,6 +3,7 @@ package confluence
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -298,5 +299,46 @@ func TestCollectV1_PrefixesWiki(t *testing.T) {
 	}
 	if len(paths) != 2 || paths[1] != "/wiki/rest/api/search?cursor=x" {
 		t.Errorf("paths = %v", paths)
+	}
+}
+
+func TestCollectV2_RejectsNextLinkWithoutLeadingSlash(t *testing.T) {
+	var n int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&n, 1)
+		w.Header().Set("Link", `<@evil.example.com/x>; rel="next"`)
+		w.Write([]byte(`{"results":[{"id":1}]}`))
+	}))
+	defer srv.Close()
+	_, err := collectV2[item](context.Background(), newTestClient(srv, &sleepRecorder{}), testEP, nil, 0, true)
+	var de *domain.Error
+	if !errors.As(err, &de) || de.Kind != domain.ErrAPI {
+		t.Fatalf("err = %v, want *domain.Error(ErrAPI)", err)
+	}
+	if n != 1 {
+		t.Errorf("requests = %d, want 1", n)
+	}
+}
+
+func TestCollectV2_InvalidNextLinkIsDomainError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Link", `</wiki/%zz>; rel="next"`)
+		w.Write([]byte(`{"results":[{"id":1}]}`))
+	}))
+	defer srv.Close()
+	_, err := collectV2[item](context.Background(), newTestClient(srv, &sleepRecorder{}), testEP, nil, 0, true)
+	var de *domain.Error
+	if !errors.As(err, &de) || de.Kind != domain.ErrAPI {
+		t.Fatalf("err = %v, want *domain.Error(ErrAPI)", err)
+	}
+}
+
+func TestDefaultSleep_ReturnsOnContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	start := time.Now()
+	New(Options{}).sleep(ctx, time.Minute)
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("sleep took %v after cancel", d)
 	}
 }

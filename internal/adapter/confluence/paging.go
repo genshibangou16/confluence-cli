@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/genshibangou16/confluence-cli/internal/domain"
 )
 
 const (
@@ -72,7 +74,12 @@ func collect[T any](ctx context.Context, c *Client, ep endpoint, q url.Values, l
 		}
 		u, err := url.Parse(next)
 		if err != nil {
-			return nil, err
+			return nil, &domain.Error{Kind: domain.ErrAPI, Message: "次ページのリンクを解釈できません", Err: err}
+		}
+		// root の直後に連結するため、"/" で始まらないと root のホストが書き換わり、
+		// 認証情報が別のホストへ送られる。
+		if !strings.HasPrefix(u.Path, "/") {
+			return nil, &domain.Error{Kind: domain.ErrAPI, Message: "次ページのリンクが不正です: " + next}
 		}
 		ep.path = u.Path
 		query = u.Query()
