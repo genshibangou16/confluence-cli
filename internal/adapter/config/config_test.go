@@ -45,6 +45,7 @@ func newFixture(t *testing.T, userYAML, localYAML string) (*fixture, Sources) {
 	return f, Sources{
 		Env:            func(k string) string { return f.env[k] },
 		Cwd:            cwd,
+		Home:           f.dir,
 		UserConfigPath: f.user,
 		RunCommand:     func(n string, a ...string) ([]byte, error) { return f.run(n, a...) },
 	}
@@ -236,10 +237,159 @@ func TestSaveUser_Permissions(t *testing.T) {
 
 func TestFindLocal(t *testing.T) {
 	_, src := newFixture(t, "", "base_url: https://a.atlassian.net\n")
-	if got := FindLocal(src.Cwd); filepath.Base(got) != LocalConfigName {
+	if got, _ := FindLocal(src.Cwd, src.Home); filepath.Base(got) != LocalConfigName {
 		t.Fatalf("got %q", got)
 	}
-	if got := FindLocal(t.TempDir()); got != "" {
+	if got, _ := FindLocal(t.TempDir(), ""); got != "" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestFindLocal_StopsAtHome(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, LocalConfigName), "base_url: https://a.atlassian.net\n")
+	home := filepath.Join(root, "home")
+	cwd := filepath.Join(home, "proj")
+	if err := os.MkdirAll(cwd, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := FindLocal(cwd, home); got != "" {
+		t.Fatalf("home より上のファイルを採用した: %q", got)
+	}
+	write(t, filepath.Join(home, LocalConfigName), "base_url: https://a.atlassian.net\n")
+	if got, _ := FindLocal(cwd, home); got != filepath.Join(home, LocalConfigName) {
+		t.Fatalf("home 直下のファイルを採用していない: %q", got)
+	}
+}
+
+func TestFindLocal_SkipsGroupWritable(t *testing.T) {
+	_, src := newFixture(t, "", "base_url: https://a.atlassian.net\n")
+	p := FindLocalPathForTest(t, src)
+	if err := os.Chmod(p, 0o662); err != nil {
+		t.Fatal(err)
+	}
+	got, warns := FindLocal(src.Cwd, src.Home)
+	if got != "" || len(warns) != 1 || !strings.Contains(warns[0], p) {
+		t.Fatalf("got=%q warns=%v", got, warns)
+	}
+	f, src2 := newFixture(t, "email: e\napi_token: t\nbase_url: https://u.example.com\n", "base_url: https://a.atlassian.net\n")
+	_ = f
+	if err := os.Chmod(filepath.Join(filepath.Dir(src2.Cwd), LocalConfigName), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if _, warns, err := Load(src2); err != nil || len(warns) == 0 {
+		t.Fatalf("%v %v", warns, err)
+	}
+}
+
+func FindLocalPathForTest(t *testing.T, src Sources) string {
+	t.Helper()
+	p, _ := FindLocal(src.Cwd, src.Home)
+	if p == "" {
+		t.Fatal("ローカル設定が見つからない")
+	}
+	return p
+}
+
+func TestLoad_WarnsWhenLocalBaseURLAdopted(t *testing.T) {
+	_, src := newFixture(t, "email: e\napi_token: t\n", "base_url: https://x.atlassian.net/wiki\n")
+	_, warns, err := Load(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, w := range warns {
+		if strings.Contains(w, LocalConfigName) && strings.Contains(w, "x.atlassian.net") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("warns = %v", warns)
+	}
+}
+
+func TestSaveUser_EmptyWritableSpacesRoundTrip(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	empty := []string{}
+	if err := SaveUser(p, FileConfig{BaseURL: "https://a.example.com", Email: "e", APIToken: "t", WritableSpaces: &empty}); err != nil {
+		t.Fatal(err)
+	}
+	_, src := newFixture(t, "", "")
+	src.UserConfigPath = p
+	s, _, err := Load(src)
+	if err != nil || s.WritableSpaces == nil || len(s.WritableSpaces) != 0 {
+		t.Fatalf("%+v %v", s, err)
+	}
+}
+
+func TestLoad_UserEmptyWritableSpacesYAML(t *testing.T) {
+	_, src := newFixture(t, "base_url: https://a.example.com\nemail: e\napi_token: t\nwritable_spaces: []\n", "")
+	s, _, err := Load(src)
+	if err != nil || s.WritableSpaces == nil || len(s.WritableSpaces) != 0 {
+		t.Fatalf("%+v %v", s, err)
+	}
+}
+
+func TestLoad_LocalBaseURLHostCheck(t *testing.T) {
+	user := "email: e\napi_token: t\nbase_url: https://user.example.com\n"
+	for _, bad := range []string{
+		"https://x.atlassian.net@evil.com", "https://evil.com/.atlassian.net", "https://atlassian.net.evil.com",
+		"https://evil.com#.atlassian.net", "https://atlassian.net", "https://u:p@x.atlassian.net/wiki",
+	} {
+		_, src := newFixture(t, user, "base_url: "+bad+"\n")
+		s, warns, err := Load(src)
+		if err != nil || s.BaseURL != "https://user.example.com" || len(warns) == 0 {
+			t.Fatalf("%s: %+v %v %v", bad, s, warns, err)
+		}
+	}
+	for good, want := range map[string]string{
+		"HTTPS://X.ATLASSIAN.NET/wiki":      "HTTPS://X.ATLASSIAN.NET/wiki",
+		"https://x.atlassian.net:8443/wiki": "https://x.atlassian.net:8443/wiki",
+	} {
+		_, src := newFixture(t, "email: e\napi_token: t\n", "base_url: "+good+"\n")
+		s, _, err := Load(src)
+		if err != nil || s.BaseURL != want {
+			t.Fatalf("%s: %+v %v", good, s, err)
+		}
+	}
+}
+
+func TestLoad_RejectsUserinfoInBaseURL(t *testing.T) {
+	_, src := newFixture(t, "base_url: https://u:p@x.atlassian.net/wiki\nemail: e\napi_token: t\n", "")
+	if _, _, err := Load(src); domain.KindOf(err) != domain.ErrValidation {
+		t.Fatalf("user: %v", err)
+	}
+	f, src := newFixture(t, "email: e\napi_token: t\n", "")
+	f.env["CONFLUENCE_BASE_URL"] = "https://u:p@x.atlassian.net/wiki"
+	if _, _, err := Load(src); domain.KindOf(err) != domain.ErrValidation {
+		t.Fatalf("env: %v", err)
+	}
+}
+
+func TestLoad_EnvReadOnlyValues(t *testing.T) {
+	cases := map[string]struct {
+		ro   bool
+		warn bool
+	}{"TRUE": {true, false}, "Yes": {true, false}, "on": {true, false}, "off": {false, false}, "No": {false, false}, "false": {false, false}, "banana": {true, true}}
+	for v, c := range cases {
+		f, src := newFixture(t, "base_url: https://a.example.com\nemail: e\napi_token: t\n", "")
+		f.env["CONFLUENCE_READ_ONLY"] = v
+		s, warns, err := Load(src)
+		if err != nil || s.ReadOnly != c.ro || (len(warns) > 0) != c.warn {
+			t.Fatalf("%q: %+v %v %v", v, s, warns, err)
+		}
+	}
+}
+
+func TestLoad_UnreadableUserConfigIsError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root では読み取り権限を外せない")
+	}
+	_, src := newFixture(t, "base_url: https://a.example.com\nemail: e\napi_token: t\nread_only: true\n", "")
+	if err := os.Chmod(src.UserConfigPath, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Load(src); domain.KindOf(err) != domain.ErrValidation {
+		t.Fatalf("err = %v", err)
 	}
 }
