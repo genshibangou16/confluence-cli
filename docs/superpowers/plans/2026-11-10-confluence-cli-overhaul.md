@@ -421,12 +421,12 @@ func TestRemoveLabel_UsesQueryName(t *testing.T) // name に "/" を含むラベ
 - Produces:
   - `ports.go`（使う側ごとに最小のメソッド集合）:
     - `type Searcher interface { Search(ctx context.Context, cql string, limit int, all bool) ([]domain.SearchHit, error) }`
-    - `type SpaceFinder interface { SpaceByKey(ctx context.Context, key string) (domain.Space, error); SpaceByID(ctx context.Context, id string) (domain.Space, error) }`
+    - `type SpaceKeyFinder interface { SpaceByKey(ctx context.Context, key string) (domain.Space, error) }`
     - `type PageGetter interface { GetPage(ctx context.Context, id domain.PageID, body bool, version int) (domain.Page, error) }`
     - `type PageLister interface { ListPages(...); Children(...); Ancestors(...); GetPagesByIDs(...); Versions(...) }`（シグネチャは Task 7 と同じ）
     - `type LabelReader interface { Labels(...); PageLabels(...); PagesWithLabel(...) }`
   - `type SearchService struct`、`func NewSearchService(s Searcher) *SearchService`、`func (s *SearchService) Search(ctx, f cql.Filter, limit int, all bool) (hits []domain.SearchHit, warnings []string, err error)`
-  - `type SpaceService struct`、`func NewSpaceService(f SpaceFinder) *SpaceService`、`func (s *SpaceService) ResolveID(ctx, key, id string) (string, error)`（key があれば ID に変換、両方空なら ""、両方あれば一致を確認）
+  - `type SpaceService struct`、`func NewSpaceService(f SpaceKeyFinder) *SpaceService`、`func (s *SpaceService) ResolveID(ctx, key, id string) (string, error)`（key があれば ID に変換、両方空なら ""、両方あれば一致を確認）
   - `type PageQuery struct`、`func NewPageQuery(g PageGetter) *PageQuery`、`func (q *PageQuery) Get(ctx, id domain.PageID, r GetRequest) (PageView, error)`
     - `type Format string` と定数 `FormatMarkdown`・`FormatStorage`・`FormatJSON`
     - `type GetRequest struct { Format Format; Version int; Outline bool; Section string }`
@@ -738,7 +738,7 @@ func TestConvert_TaskIDsSequential(t *testing.T)
 - Produces:
   - `ports.go` に追加: `type PageWriter interface { CreatePage(...); UpdatePage(...); DeletePage(...) }`（シグネチャは Task 7 と同じ）
   - `type WritePolicy struct { ReadOnly bool; WritableSpaces []string }`
-  - `type WriteGuard struct`、`func NewWriteGuard(p WritePolicy, spaces SpaceFinder) *WriteGuard`、`func (g *WriteGuard) Check(ctx, spaceID string) error`（ReadOnly→`ErrReadOnly`。WritableSpaces が空でなく、spaceID のキーが含まれない→`ErrReadOnly`、Message にスペースキー）
+  - `type WriteGuard struct`、`type SpaceIDFinder interface { SpaceByID(ctx context.Context, id string) (domain.Space, error) }`（ports.go に追加）、`func NewWriteGuard(p WritePolicy, spaces SpaceIDFinder) *WriteGuard`、`func (g *WriteGuard) Check(ctx, spaceID string) error`（ReadOnly→`ErrReadOnly`。WritableSpaces が nil でなく（nil は制限なし、空は書き込み不可）、spaceID のキーが含まれない→`ErrReadOnly`、Message にスペースキー）
   - `type InputFormat string` と定数 `InputStorage`・`InputMarkdown`
   - `type PageCommand struct`、`func NewPageCommand(g PageGetter, w PageWriter, guard *WriteGuard) *PageCommand`
   - `type CreateRequest struct { SpaceID string; ParentID domain.PageID; Title, Body string; Input InputFormat }`
