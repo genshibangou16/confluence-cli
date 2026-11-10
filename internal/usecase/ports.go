@@ -1,0 +1,36 @@
+// Package usecase はコマンドから呼ばれる処理を、Confluence API の呼び出し方から切り離して実装する。
+// ポートの interface はこのパッケージが呼ぶメソッドだけを持ち、confluence アダプターの *Client が満たす。
+package usecase
+
+import (
+	"context"
+
+	"github.com/genshibangou16/confluence-cli/internal/domain"
+)
+
+type Searcher interface {
+	Search(ctx context.Context, cql string, limit int, all bool) ([]domain.SearchHit, error)
+}
+
+type SpaceFinder interface {
+	SpaceByKey(ctx context.Context, key string) (domain.Space, error)
+	SpaceByID(ctx context.Context, id string) (domain.Space, error)
+}
+
+type PageGetter interface {
+	GetPage(ctx context.Context, id domain.PageID, body bool, version int) (domain.Page, error)
+}
+
+type PageLister interface {
+	ListPages(ctx context.Context, spaceID string, limit int, all bool) ([]domain.PageSummary, error)
+	Children(ctx context.Context, id domain.PageID, limit int, all bool) ([]domain.PageSummary, error)
+	Ancestors(ctx context.Context, id domain.PageID) ([]domain.Ancestor, error)
+	GetPagesByIDs(ctx context.Context, ids []domain.PageID) ([]domain.PageSummary, error)
+	Versions(ctx context.Context, id domain.PageID, limit int, all bool) ([]domain.Version, error)
+}
+
+type LabelReader interface {
+	Labels(ctx context.Context, prefix string, limit int, all bool) ([]domain.Label, error)
+	PageLabels(ctx context.Context, id domain.PageID, limit int, all bool) ([]domain.Label, error)
+	PagesWithLabel(ctx context.Context, labelID, spaceID string, limit int, all bool) ([]domain.PageSummary, error)
+}
