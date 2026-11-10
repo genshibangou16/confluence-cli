@@ -29,18 +29,23 @@ func Validate(body string) error {
 			return nil
 		}
 		if err != nil {
-			msg := err.Error()
-			var xe *xml.SyntaxError
-			if errors.As(err, &xe) {
-				msg = xe.Msg
-			}
-			// 閉じていない要素は末尾に付けた終了タグで検出されるため、オフセットを本文の範囲に収める。
-			off := int(d.InputOffset()) - prefix
-			off = max(0, min(off, len(body)))
-			line, col := position(body[:off])
-			return &SyntaxError{Line: line, Column: col, Msg: msg}
+			return syntaxError(body, d, prefix, err)
 		}
 	}
+}
+
+// syntaxError は Decoder.Token が返した err を、元の本文での位置を持つ *SyntaxError にする。
+func syntaxError(body string, d *xml.Decoder, prefix int, err error) *SyntaxError {
+	msg := err.Error()
+	var xe *xml.SyntaxError
+	if errors.As(err, &xe) {
+		msg = xe.Msg
+	}
+	// 閉じていない要素は末尾に付けた終了タグで検出されるため、オフセットを本文の範囲に収める。
+	off := int(d.InputOffset()) - prefix
+	off = max(0, min(off, len(body)))
+	line, col := position(body[:off])
+	return &SyntaxError{Line: line, Column: col, Msg: msg}
 }
 
 // position は s を読み終えた位置の行と列を返す。
