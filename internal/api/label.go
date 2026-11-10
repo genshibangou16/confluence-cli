@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/ryo-imai-bit/confluence-cli/internal/client"
+	"github.com/genshibangou16/confluence-cli/internal/client"
 )
 
 // Label represents a Confluence label

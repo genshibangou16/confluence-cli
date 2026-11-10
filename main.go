@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/ryo-imai-bit/confluence-cli/cmd"
+	"github.com/genshibangou16/confluence-cli/cmd"
 )
 
 func main() {

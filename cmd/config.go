@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/ryo-imai-bit/confluence-cli/internal/client"
+	"github.com/genshibangou16/confluence-cli/internal/client"
 )
 
 var configCmd = &cobra.Command{

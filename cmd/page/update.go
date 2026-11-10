@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ryo-imai-bit/confluence-cli/internal/api"
+	"github.com/genshibangou16/confluence-cli/internal/api"
 )
 
 var (

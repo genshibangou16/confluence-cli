@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ryo-imai-bit/confluence-cli/cmd/label"
-	"github.com/ryo-imai-bit/confluence-cli/cmd/page"
+	"github.com/genshibangou16/confluence-cli/cmd/label"
+	"github.com/genshibangou16/confluence-cli/cmd/page"
 )
 
 var rootCmd = &cobra.Command{

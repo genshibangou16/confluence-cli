@@ -7,35 +7,35 @@ Atlassian Confluence CLI tool built with Go.
 ### Using `go install` (recommended)
 
 ```bash
-go install github.com/ryo-imai-bit/confluence-cli@latest
+go install github.com/genshibangou16/confluence-cli@latest
 ```
 
 The binary will be installed to `$GOPATH/bin` (usually `~/go/bin`).
 
 ### Download binary
 
-Download the latest binary from [GitHub Releases](https://github.com/ryo-imai-bit/confluence-cli/releases) and place it in your PATH:
+Download the latest binary from [GitHub Releases](https://github.com/genshibangou16/confluence-cli/releases) and place it in your PATH:
 
 ```bash
 # macOS (Apple Silicon)
-sudo curl -L https://github.com/ryo-imai-bit/confluence-cli/releases/latest/download/confluence-darwin-arm64 -o /usr/local/bin/confluence
+sudo curl -L https://github.com/genshibangou16/confluence-cli/releases/latest/download/confluence-darwin-arm64 -o /usr/local/bin/confluence
 sudo chmod +x /usr/local/bin/confluence
 
 # macOS (Intel)
-sudo curl -L https://github.com/ryo-imai-bit/confluence-cli/releases/latest/download/confluence-darwin-amd64 -o /usr/local/bin/confluence
+sudo curl -L https://github.com/genshibangou16/confluence-cli/releases/latest/download/confluence-darwin-amd64 -o /usr/local/bin/confluence
 sudo chmod +x /usr/local/bin/confluence
 
 # Linux
-sudo curl -L https://github.com/ryo-imai-bit/confluence-cli/releases/latest/download/confluence-linux-amd64 -o /usr/local/bin/confluence
+sudo curl -L https://github.com/genshibangou16/confluence-cli/releases/latest/download/confluence-linux-amd64 -o /usr/local/bin/confluence
 sudo chmod +x /usr/local/bin/confluence
 ```
 
 ### Build from source
 
 ```bash
-git clone https://github.com/ryo-imai-bit/confluence-cli.git
+git clone https://github.com/genshibangou16/confluence-cli.git
 cd confluence-cli
-make install  # installs to /usr/local/bin
+make install  # installs to $GOPATH/bin (usually ~/go/bin)
 ```
 
 ## Configuration

@@ -40,3 +40,7 @@ confluence-*
 
 # Local config (contains credentials)
 .confluence-cli.yaml
+
+# Private test data
+testdata/private/
+/confluence-cli
