@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -68,23 +69,26 @@ func userConfigPath(env func(string) string) string {
 	return filepath.Join(home, ".config", "confluence-cli", "config.yaml")
 }
 
-// FindLocal は cwd から親ディレクトリへ向かってローカル設定ファイルを探す。無ければ空文字列を返す。
-// 他のユーザーが置いたファイルや書き換えられるファイルを読まないよう、home より上は探さず、
-// 所有者が実行ユーザーでないファイルと、グループ・その他に書き込み権限があるファイルはスキップして警告を返す。
-func FindLocal(cwd, home string) (string, []string) {
+// FindLocal は cwd から親ディレクトリへ向かってローカル設定ファイルを探し、見つけたファイルのパスと内容を返す。
+// 無ければパスと内容は空になる。
+// 他のユーザーが置いたファイルや書き換えられるファイルを読まないよう、次の制限を課す。
+//   - home より上は探さない（cwd と home はシンボリックリンクを解決してから比較する）。
+//   - シンボリックリンク、所有者が実行ユーザーでないファイル、グループ・その他に書き込み権限があるファイルはスキップして警告を返す。
+//
+// 検査と読み込みの間にファイルを差し替えられないよう、ファイルは一度だけ開き、
+// 検査も内容の読み込みも開いたファイルディスクリプタに対して行う。
+func FindLocal(cwd, home string) (string, []byte, []string) {
 	var warns []string
-	dir := cwd
+	dir := resolveDir(cwd)
+	home = resolveDir(home)
 	for dir != "" {
 		p := filepath.Join(dir, LocalConfigName)
-		if fi, err := os.Stat(p); err == nil {
-			switch {
-			case !ownedByCurrentUser(fi):
-				warns = append(warns, fmt.Sprintf("ローカル設定 %s の所有者が実行ユーザーではないためスキップする", p))
-			case fi.Mode().Perm()&0o022 != 0:
-				warns = append(warns, fmt.Sprintf("ローカル設定 %s にグループまたはその他の書き込み権限があるためスキップする", p))
-			default:
-				return p, warns
-			}
+		data, warn, ok := readLocalFile(p)
+		if ok {
+			return p, data, warns
+		}
+		if warn != "" {
+			warns = append(warns, warn)
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir || (home != "" && dir == home) {
@@ -92,7 +96,55 @@ func FindLocal(cwd, home string) (string, []string) {
 		}
 		dir = parent
 	}
-	return "", warns
+	return "", nil, warns
+}
+
+// resolveDir はシンボリックリンクを解決したパスを返す。解決できないときは整形しただけのパスを返す。
+func resolveDir(p string) string {
+	if p == "" {
+		return ""
+	}
+	p = filepath.Clean(p)
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return p
+}
+
+// readLocalFile は p が検査を通る通常ファイルのときだけ内容を返す。
+// ファイルが無いときは警告も出さない。スキップするときは警告を返す。
+func readLocalFile(p string) (data []byte, warn string, ok bool) {
+	li, err := os.Lstat(p)
+	if err != nil {
+		return nil, "", false
+	}
+	if li.Mode()&fs.ModeSymlink != 0 {
+		return nil, fmt.Sprintf("ローカル設定 %s はシンボリックリンクのためスキップする", p), false
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return nil, fmt.Sprintf("ローカル設定 %s を開けないためスキップする", p), false
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, fmt.Sprintf("ローカル設定 %s の情報を取得できないためスキップする", p), false
+	}
+	// Lstat と Open の間にシンボリックリンクへ差し替えられた場合、開いたファイルは Lstat の結果と別物になる。
+	if !fi.Mode().IsRegular() || !os.SameFile(li, fi) {
+		return nil, fmt.Sprintf("ローカル設定 %s が検査中に変更されたためスキップする", p), false
+	}
+	switch {
+	case !ownedByCurrentUser(fi):
+		return nil, fmt.Sprintf("ローカル設定 %s の所有者が実行ユーザーではないためスキップする", p), false
+	case fi.Mode().Perm()&0o022 != 0:
+		return nil, fmt.Sprintf("ローカル設定 %s にグループまたはその他の書き込み権限があるためスキップする", p), false
+	}
+	data, err = io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Sprintf("ローカル設定 %s を読めないためスキップする", p), false
+	}
+	return data, "", true
 }
 
 // SaveUser はユーザー設定を書き込む。API トークンを含みうるため、ファイルは 0600、ディレクトリは 0700 にする。
@@ -134,14 +186,10 @@ func Load(src Sources) (Settings, []string, error) {
 	}
 
 	var local FileConfig
-	localPath, findWarns := FindLocal(src.Cwd, src.Home)
+	localPath, localData, findWarns := FindLocal(src.Cwd, src.Home)
 	warns = append(warns, findWarns...)
 	if localPath != "" {
-		data, err := os.ReadFile(localPath)
-		if err != nil {
-			return Settings{}, nil, validation("ローカル設定ファイル %s を読めない", localPath)
-		}
-		if err := yaml.Unmarshal(data, &local); err != nil {
+		if err := yaml.Unmarshal(localData, &local); err != nil {
 			warns = append(warns, fmt.Sprintf("ローカル設定 %s を解釈できないため無視する", localPath))
 			local = FileConfig{}
 		}

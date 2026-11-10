@@ -237,10 +237,10 @@ func TestSaveUser_Permissions(t *testing.T) {
 
 func TestFindLocal(t *testing.T) {
 	_, src := newFixture(t, "", "base_url: https://a.atlassian.net\n")
-	if got, _ := FindLocal(src.Cwd, src.Home); filepath.Base(got) != LocalConfigName {
+	if got, _, _ := FindLocal(src.Cwd, src.Home); filepath.Base(got) != LocalConfigName {
 		t.Fatalf("got %q", got)
 	}
-	if got, _ := FindLocal(t.TempDir(), ""); got != "" {
+	if got, _, _ := FindLocal(t.TempDir(), ""); got != "" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -253,27 +253,29 @@ func TestFindLocal_StopsAtHome(t *testing.T) {
 	if err := os.MkdirAll(cwd, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := FindLocal(cwd, home); got != "" {
+	if got, _, _ := FindLocal(cwd, home); got != "" {
 		t.Fatalf("home より上のファイルを採用した: %q", got)
 	}
 	write(t, filepath.Join(home, LocalConfigName), "base_url: https://a.atlassian.net\n")
-	if got, _ := FindLocal(cwd, home); got != filepath.Join(home, LocalConfigName) {
+	if got, _, _ := FindLocal(cwd, home); got != filepath.Join(resolveDir(home), LocalConfigName) {
 		t.Fatalf("home 直下のファイルを採用していない: %q", got)
 	}
 }
 
 func TestFindLocal_SkipsGroupWritable(t *testing.T) {
 	_, src := newFixture(t, "", "base_url: https://a.atlassian.net\n")
-	p := FindLocalPathForTest(t, src)
+	p, _, _ := FindLocal(src.Cwd, src.Home)
+	if p == "" {
+		t.Fatal("ローカル設定が見つからない")
+	}
 	if err := os.Chmod(p, 0o662); err != nil {
 		t.Fatal(err)
 	}
-	got, warns := FindLocal(src.Cwd, src.Home)
+	got, _, warns := FindLocal(src.Cwd, src.Home)
 	if got != "" || len(warns) != 1 || !strings.Contains(warns[0], p) {
 		t.Fatalf("got=%q warns=%v", got, warns)
 	}
-	f, src2 := newFixture(t, "email: e\napi_token: t\nbase_url: https://u.example.com\n", "base_url: https://a.atlassian.net\n")
-	_ = f
+	_, src2 := newFixture(t, "email: e\napi_token: t\nbase_url: https://u.example.com\n", "base_url: https://a.atlassian.net\n")
 	if err := os.Chmod(filepath.Join(filepath.Dir(src2.Cwd), LocalConfigName), 0o666); err != nil {
 		t.Fatal(err)
 	}
@@ -282,13 +284,52 @@ func TestFindLocal_SkipsGroupWritable(t *testing.T) {
 	}
 }
 
-func FindLocalPathForTest(t *testing.T, src Sources) string {
-	t.Helper()
-	p, _ := FindLocal(src.Cwd, src.Home)
-	if p == "" {
-		t.Fatal("ローカル設定が見つからない")
+func TestFindLocal_ReturnsContent(t *testing.T) {
+	_, src := newFixture(t, "", "base_url: https://a.atlassian.net\n")
+	_, data, _ := FindLocal(src.Cwd, src.Home)
+	if string(data) != "base_url: https://a.atlassian.net\n" {
+		t.Fatalf("data=%q", data)
 	}
-	return p
+}
+
+func TestFindLocal_SkipsSymlink(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "real.yaml")
+	write(t, target, "base_url: https://evil.atlassian.net\n")
+	home := filepath.Join(root, "home")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(home, LocalConfigName)
+	if err := os.Symlink(target, link); err != nil {
+		t.Skip("シンボリックリンクを作れない")
+	}
+	got, data, warns := FindLocal(home, home)
+	if got != "" || data != nil || len(warns) != 1 || !strings.Contains(warns[0], LocalConfigName) || !strings.Contains(warns[0], "シンボリックリンク") {
+		t.Fatalf("got=%q data=%q warns=%v", got, data, warns)
+	}
+}
+
+func TestFindLocal_SymlinkedHomeStillStopsWalk(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, LocalConfigName), "base_url: https://a.atlassian.net\n")
+	realHome := filepath.Join(root, "real", "home")
+	cwd := filepath.Join(realHome, "proj")
+	if err := os.MkdirAll(cwd, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	linkHome := filepath.Join(root, "homelink")
+	if err := os.Symlink(realHome, linkHome); err != nil {
+		t.Skip("シンボリックリンクを作れない")
+	}
+	// cwd は実パス、home はシンボリックリンク経由で渡す。
+	if got, _, _ := FindLocal(cwd, linkHome); got != "" {
+		t.Fatalf("home より上のファイルを採用した: %q", got)
+	}
+	// cwd をシンボリックリンク経由、home を実パスで渡しても同じ。
+	if got, _, _ := FindLocal(filepath.Join(linkHome, "proj"), realHome); got != "" {
+		t.Fatalf("home より上のファイルを採用した: %q", got)
+	}
 }
 
 func TestLoad_WarnsWhenLocalBaseURLAdopted(t *testing.T) {
