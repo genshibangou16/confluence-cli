@@ -116,3 +116,15 @@ func TestTruncate_Negative(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestWriteError_TextSanitizesControlChars(t *testing.T) {
+	var buf bytes.Buffer
+	WriteError(&buf, &domain.Error{Kind: domain.ErrAPI, Message: "bad\x1b]0;title\x07msg", Hint: "h\x1b[2Jint"}, false)
+	got := buf.String()
+	if strings.ContainsRune(got, 0x1b) || strings.ContainsRune(got, 0x07) {
+		t.Fatalf("got %q", got)
+	}
+	if got != "Error: bad ]0;title msg\nHint: h [2Jint\n" {
+		t.Fatalf("got %q", got)
+	}
+}

@@ -41,8 +41,9 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 		_ = JSON(w, e)
 		return
 	}
-	fmt.Fprintf(w, "Error: %s\n", msg)
+	// メッセージには Confluence の応答本文の文字列が入りうるため、端末へ出す前に制御文字を除く。
+	fmt.Fprintf(w, "Error: %s\n", SanitizeText(msg))
 	if hint != "" {
-		fmt.Fprintf(w, "Hint: %s\n", hint)
+		fmt.Fprintf(w, "Hint: %s\n", SanitizeText(hint))
 	}
 }
