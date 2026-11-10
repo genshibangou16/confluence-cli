@@ -8,18 +8,34 @@ import (
 	"regexp"
 	"strings"
 	"text/tabwriter"
+	"unicode"
 )
 
-var cellReplacer = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ", "\t", " ")
+// SanitizeText は Confluence 由来の文字列を端末へ出力する前に、端末の制御に使える文字を除く。
+// ESC や C1 を含む制御文字（改行・タブも含む）は空白に置き換え、表示順を変える
+// 双方向制御文字は取り除く。
+func SanitizeText(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case unicode.IsControl(r):
+			return ' '
+		case r == 0x061C, r == 0x200E, r == 0x200F,
+			r >= 0x202A && r <= 0x202E,
+			r >= 0x2066 && r <= 0x2069:
+			return -1
+		}
+		return r
+	}, s)
+}
 
 // Table は header と rows を列揃えして書き出す。区切り行は出さない。
-// セル内の改行とタブは、行がずれないよう空白に置き換える。
+// セルは SanitizeText を通すため、改行とタブは空白になり行がずれない。
 func Table(w io.Writer, header []string, rows [][]string) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	write := func(cells []string) {
 		out := make([]string, len(cells))
 		for i, c := range cells {
-			out[i] = cellReplacer.Replace(c)
+			out[i] = SanitizeText(c)
 		}
 		fmt.Fprintln(tw, strings.Join(out, "\t"))
 	}
@@ -33,6 +49,9 @@ func Table(w io.Writer, header []string, rows [][]string) error {
 // Truncate は s を n 文字（rune 単位）に切り詰め、超えた場合は末尾に「…」を付ける。
 // 日本語のマルチバイト文字を途中で切らないため、バイト数ではなく rune 数で数える。
 func Truncate(s string, n int) string {
+	if n < 0 {
+		n = 0
+	}
 	r := []rune(s)
 	if len(r) <= n {
 		return s
@@ -47,6 +66,6 @@ var tagRe = regexp.MustCompile(`<[^>]*>`)
 func CleanExcerpt(s string) string {
 	s = strings.NewReplacer("@@@hl@@@", "", "@@@endhl@@@", "").Replace(s)
 	s = tagRe.ReplaceAllString(s, "")
-	s = html.UnescapeString(s)
+	s = SanitizeText(html.UnescapeString(s))
 	return strings.Join(strings.Fields(s), " ")
 }

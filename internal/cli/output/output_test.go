@@ -80,12 +80,39 @@ func TestWriteError_Text(t *testing.T) {
 	}
 	buf.Reset()
 	WriteError(&buf, fmt.Errorf("wrap: %w", &domain.Error{Kind: domain.ErrAuth, Message: "m"}), false)
-	if buf.String() != "Error: m\n" {
+	if buf.String() != "Error: wrap: m\n" {
 		t.Errorf("got %q", buf.String())
 	}
 	buf.Reset()
 	WriteError(&buf, errors.New("boom"), false)
 	if buf.String() != "Error: boom\n" {
 		t.Errorf("got %q", buf.String())
+	}
+}
+
+func TestSanitizeText(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"\x1b[31mred", " [31mred"},
+		{"a\u009bb", "a b"},
+		{"a\u202eb\u2066c\u200fd\u061ce", "abcde"},
+		{"日本語 テキスト", "日本語 テキスト"},
+	} {
+		if got := SanitizeText(c.in); got != c.want {
+			t.Errorf("%q: got %q want %q", c.in, got, c.want)
+		}
+	}
+	if strings.Contains(CleanExcerpt("\x1b[31mred&#27;[0m"), "\x1b") {
+		t.Error("escape remained in excerpt")
+	}
+	var buf bytes.Buffer
+	_ = Table(&buf, []string{"T"}, [][]string{{"\x1b]0;x\u202e"}})
+	if strings.Contains(buf.String(), "\x1b") || strings.Contains(buf.String(), "\u202e") {
+		t.Error("unsanitized table cell")
+	}
+}
+
+func TestTruncate_Negative(t *testing.T) {
+	if got := Truncate("abc", -1); got != "…" {
+		t.Errorf("got %q", got)
 	}
 }

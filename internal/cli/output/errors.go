@@ -18,8 +18,8 @@ type ErrorJSON struct {
 	} `json:"error"`
 }
 
-// WriteError は err を w に書き出す。*domain.Error を含む場合は Message・Status・Hint を使い、
-// Message が空なら err.Error() を使う。
+// WriteError は err を w に書き出す。メッセージは err.Error() を使い、
+// ラップした側の文脈を残す。*domain.Error を含む場合は Status と Hint をその値から取る。
 func WriteError(w io.Writer, err error, asJSON bool) {
 	var de *domain.Error
 	hasDomain := errors.As(err, &de)
@@ -27,9 +27,6 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 	msg := err.Error()
 	hint := ""
 	if hasDomain {
-		if de.Message != "" {
-			msg = de.Message
-		}
 		hint = de.Hint
 	}
 
