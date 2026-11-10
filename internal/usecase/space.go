@@ -8,10 +8,10 @@ import (
 )
 
 type SpaceService struct {
-	f SpaceFinder
+	f SpaceKeyFinder
 }
 
-func NewSpaceService(f SpaceFinder) *SpaceService {
+func NewSpaceService(f SpaceKeyFinder) *SpaceService {
 	return &SpaceService{f: f}
 }
 

@@ -7,28 +7,19 @@ import (
 	"github.com/genshibangou16/confluence-cli/internal/domain"
 )
 
-type fakeSpaceFinder struct {
+type fakeSpaceKeyFinder struct {
 	byKey map[string]domain.Space
 }
 
-func (f *fakeSpaceFinder) SpaceByKey(_ context.Context, key string) (domain.Space, error) {
+func (f *fakeSpaceKeyFinder) SpaceByKey(_ context.Context, key string) (domain.Space, error) {
 	if s, ok := f.byKey[key]; ok {
 		return s, nil
 	}
 	return domain.Space{}, &domain.Error{Kind: domain.ErrNotFound}
 }
 
-func (f *fakeSpaceFinder) SpaceByID(_ context.Context, id string) (domain.Space, error) {
-	for _, s := range f.byKey {
-		if s.ID == id {
-			return s, nil
-		}
-	}
-	return domain.Space{}, &domain.Error{Kind: domain.ErrNotFound}
-}
-
 func TestResolveID(t *testing.T) {
-	svc := NewSpaceService(&fakeSpaceFinder{byKey: map[string]domain.Space{"DEV": {ID: "100", Key: "DEV"}}})
+	svc := NewSpaceService(&fakeSpaceKeyFinder{byKey: map[string]domain.Space{"DEV": {ID: "100", Key: "DEV"}}})
 	ctx := context.Background()
 
 	tests := []struct {

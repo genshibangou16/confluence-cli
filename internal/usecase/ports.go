@@ -1,5 +1,5 @@
 // Package usecase はコマンドから呼ばれる処理を、Confluence API の呼び出し方から切り離して実装する。
-// ポートの interface はこのパッケージが呼ぶメソッドだけを持ち、confluence アダプターの *Client が満たす。
+// ポートの interface は、このパッケージのユースケースが呼ぶメソッドだけを持つ。
 package usecase
 
 import (
@@ -12,9 +12,8 @@ type Searcher interface {
 	Search(ctx context.Context, cql string, limit int, all bool) ([]domain.SearchHit, error)
 }
 
-type SpaceFinder interface {
+type SpaceKeyFinder interface {
 	SpaceByKey(ctx context.Context, key string) (domain.Space, error)
-	SpaceByID(ctx context.Context, id string) (domain.Space, error)
 }
 
 type PageGetter interface {
