@@ -167,7 +167,8 @@ func TestPageGet_StorageToStdoutVersionToStderr(t *testing.T) {
 	if code := e.run("page", "get", "1234567890", "--format", "storage", "--version", "7"); code != 0 {
 		t.Fatalf("code = %d, stderr = %s", code, e.stderr)
 	}
-	if e.stdout.String() != "<p>本文</p>\n" {
+	// 本文は末尾が改行でない。page update --body-file - に渡して往復できるよう、改行を足さずにそのまま出す。
+	if e.stdout.String() != "<p>本文</p>" {
 		t.Fatalf("stdout = %q", e.stdout)
 	}
 	if !strings.Contains(e.stderr.String(), "version: 7\n") {
