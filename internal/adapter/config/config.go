@@ -147,6 +147,22 @@ func readLocalFile(p string) (data []byte, warn string, ok bool) {
 	return data, "", true
 }
 
+// ReadUser はユーザー設定ファイルを読む。ファイルが無ければ ok が false になる。
+// 読めないファイルを無視すると read_only と writable_spaces が失われるため、存在しない場合以外はエラーにする。
+func ReadUser(path string) (fc FileConfig, ok bool, err error) {
+	data, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return FileConfig{}, false, nil
+	case err != nil:
+		return FileConfig{}, false, validation("ユーザー設定ファイル %s を読めない", path)
+	}
+	if err := yaml.Unmarshal(data, &fc); err != nil {
+		return FileConfig{}, false, validation("ユーザー設定ファイル %s を解釈できない", path)
+	}
+	return fc, true, nil
+}
+
 // SaveUser はユーザー設定を書き込む。API トークンを含みうるため、ファイルは 0600、ディレクトリは 0700 にする。
 func SaveUser(path string, s FileConfig) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -173,16 +189,9 @@ func validation(format string, a ...any) error {
 func Load(src Sources) (Settings, []string, error) {
 	var warns []string
 
-	var user FileConfig
-	// 読めないファイルを無視すると read_only と writable_spaces が失われるため、存在しない場合以外はエラーにする。
-	data, err := os.ReadFile(src.UserConfigPath)
-	switch {
-	case err == nil:
-		if err := yaml.Unmarshal(data, &user); err != nil {
-			return Settings{}, nil, validation("ユーザー設定ファイル %s を解釈できない", src.UserConfigPath)
-		}
-	case !errors.Is(err, fs.ErrNotExist):
-		return Settings{}, nil, validation("ユーザー設定ファイル %s を読めない", src.UserConfigPath)
+	user, _, err := ReadUser(src.UserConfigPath)
+	if err != nil {
+		return Settings{}, nil, err
 	}
 
 	var local FileConfig
@@ -201,7 +210,7 @@ func Load(src Sources) (Settings, []string, error) {
 		warns = append(warns, fmt.Sprintf("ローカル設定 %s の api_token_command は読まない。ユーザー設定に書く", localPath))
 	}
 	localBase := local.BaseURL
-	if localBase != "" && !isAtlassianNetHTTPS(localBase) {
+	if localBase != "" && !IsAtlassianNetHTTPS(localBase) {
 		warns = append(warns, fmt.Sprintf("ローカル設定 %s の base_url は https の *.atlassian.net だけを採用するため無視する", localPath))
 		localBase = ""
 	}
@@ -266,7 +275,9 @@ func first(vs ...string) string {
 	return ""
 }
 
-func isAtlassianNetHTTPS(raw string) bool {
+// IsAtlassianNetHTTPS は raw が認証情報を含まない https の *.atlassian.net の URL かを返す。
+// ローカル設定の base_url として採用する条件。
+func IsAtlassianNetHTTPS(raw string) bool {
 	u, err := url.Parse(raw)
 	return err == nil && u.Scheme == "https" && u.User == nil && strings.HasSuffix(strings.ToLower(u.Hostname()), ".atlassian.net")
 }

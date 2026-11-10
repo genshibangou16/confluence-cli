@@ -245,3 +245,14 @@ func TestGetPage_NotFound(t *testing.T) {
 		t.Errorf("err=%v", err)
 	}
 }
+
+func TestListPages_NoSpaceOmitsSpaceID(t *testing.T) {
+	var rec []recorded
+	c := recordingClient(t, 200, `{"results":[]}`, &rec)
+	if _, err := c.ListPages(context.Background(), "", 5, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := rec[0].query["space-id"]; ok {
+		t.Errorf("query=%v", rec[0].query)
+	}
+}

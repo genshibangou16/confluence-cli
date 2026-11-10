@@ -40,6 +40,9 @@ func (r searchResultJSON) spaceKey() string {
 	return ""
 }
 
+// highlightMarkers は検索語に一致した箇所を示すマーカーを除く。タイトル検索では title にもマーカーが入る。
+var highlightMarkers = strings.NewReplacer("@@@hl@@@", "", "@@@endhl@@@", "")
+
 // Search は CQL で検索する。content を持たない結果（ユーザーなど）は含めない。
 // 日時を解釈できない結果は LastModified をゼロ値にする。
 func (c *Client) Search(ctx context.Context, cql string, limit int, all bool) ([]domain.SearchHit, error) {
@@ -54,7 +57,7 @@ func (c *Client) Search(ctx context.Context, cql string, limit int, all bool) ([
 			t, _ := time.Parse(time.RFC3339, r.LastModified)
 			hits = append(hits, domain.SearchHit{
 				ID:           domain.PageID(r.Content.ID),
-				Title:        r.Title,
+				Title:        highlightMarkers.Replace(r.Title),
 				Type:         r.Content.Type,
 				SpaceKey:     r.spaceKey(),
 				Excerpt:      r.Excerpt,

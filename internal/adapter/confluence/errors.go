@@ -34,13 +34,28 @@ func apiError(ep endpoint, status int, body []byte) *domain.Error {
 	return e
 }
 
-// errorMessage は応答の message を返す。message が無ければ本文の先頭 500 バイトを返す。
+// errorMessage は応答の message（v1 API の形）か、errors[].title を "; " で連結した値（v2 API の形）を返す。
+// どちらも無ければ本文の先頭 500 バイトを返す。
 func errorMessage(body []byte) string {
 	var m struct {
 		Message string `json:"message"`
+		Errors  []struct {
+			Title string `json:"title"`
+		} `json:"errors"`
 	}
-	if json.Unmarshal(body, &m) == nil && m.Message != "" {
-		return m.Message
+	if json.Unmarshal(body, &m) == nil {
+		if m.Message != "" {
+			return m.Message
+		}
+		var titles []string
+		for _, e := range m.Errors {
+			if e.Title != "" {
+				titles = append(titles, e.Title)
+			}
+		}
+		if len(titles) > 0 {
+			return strings.Join(titles, "; ")
+		}
 	}
 	if len(body) > maxMessageBytes {
 		body = body[:maxMessageBytes]

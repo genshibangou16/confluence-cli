@@ -434,3 +434,31 @@ func TestLoad_UnreadableUserConfigIsError(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestReadUser(t *testing.T) {
+	f, _ := newFixture(t, "base_url: https://a.example.com\nemail: e\napi_token_command: [security, find]\nread_only: true\n", "")
+	got, ok, err := ReadUser(f.user)
+	if err != nil || !ok {
+		t.Fatalf("ok = %v, err = %v", ok, err)
+	}
+	if got.BaseURL != "https://a.example.com" || !reflect.DeepEqual(got.APITokenCommand, []string{"security", "find"}) || !got.ReadOnly {
+		t.Fatalf("got %+v", got)
+	}
+
+	_, ok, err = ReadUser(filepath.Join(t.TempDir(), "none.yaml"))
+	if err != nil || ok {
+		t.Fatalf("missing: ok = %v, err = %v", ok, err)
+	}
+
+	bad := filepath.Join(t.TempDir(), "bad.yaml")
+	write(t, bad, "base_url: [")
+	if _, _, err := ReadUser(bad); domain.KindOf(err) != domain.ErrValidation {
+		t.Fatalf("bad: err = %v", err)
+	}
+}
+
+func TestIsAtlassianNetHTTPS(t *testing.T) {
+	if !IsAtlassianNetHTTPS("https://example.atlassian.net/wiki") || IsAtlassianNetHTTPS("http://example.atlassian.net") || IsAtlassianNetHTTPS("https://example.com") {
+		t.Fatal("unexpected result")
+	}
+}

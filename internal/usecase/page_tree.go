@@ -55,6 +55,14 @@ func (t *PageTree) Ancestors(ctx context.Context, id domain.PageID) ([]domain.An
 	return as, nil
 }
 
+// Pages は ids のページの概要を返す。取得できなかった ID は結果に含まれない。
+func (t *PageTree) Pages(ctx context.Context, ids []domain.PageID) ([]domain.PageSummary, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return t.l.GetPagesByIDs(ctx, ids)
+}
+
 func (t *PageTree) Versions(ctx context.Context, id domain.PageID, limit int, all bool) ([]domain.Version, error) {
 	return t.l.Versions(ctx, id, limit, all)
 }

@@ -342,3 +342,10 @@ func TestDefaultSleep_ReturnsOnContextCancel(t *testing.T) {
 		t.Errorf("sleep took %v after cancel", d)
 	}
 }
+
+func TestErrorMessage_V2Errors(t *testing.T) {
+	body := []byte(`{"errors":[{"status":404,"code":"NOT_FOUND","title":"Cannot find a page with id [1]","detail":null},{"title":"second"}]}`)
+	if got := errorMessage(body); got != "Cannot find a page with id [1]; second" {
+		t.Fatalf("got %q", got)
+	}
+}

@@ -140,9 +140,13 @@ func (c *Client) GetPagesByIDs(ctx context.Context, ids []domain.PageID) ([]doma
 	return out, nil
 }
 
-// ListPages はスペース内のページを本文なしで取得する。
+// ListPages はスペース内のページを本文なしで取得する。spaceID が空なら全スペースが対象。
 func (c *Client) ListPages(ctx context.Context, spaceID string, limit int, all bool) ([]domain.PageSummary, error) {
-	items, err := collectV2[summaryJSON](ctx, c, epListPages, url.Values{"space-id": {spaceID}}, limit, all)
+	q := url.Values{}
+	if spaceID != "" {
+		q.Set("space-id", spaceID)
+	}
+	items, err := collectV2[summaryJSON](ctx, c, epListPages, q, limit, all)
 	if err != nil {
 		return nil, err
 	}

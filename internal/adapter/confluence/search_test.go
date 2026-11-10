@@ -52,3 +52,15 @@ func TestSearch_EncodesCQL(t *testing.T) {
 		t.Errorf("cql=%q", rec[0].query["cql"][0])
 	}
 }
+
+func TestSearch_StripsHighlightFromTitle(t *testing.T) {
+	var rec []recorded
+	c := recordingClient(t, 200, `{"results":[{"content":{"id":"1","type":"page"},"title":"a@@@hl@@@b@@@endhl@@@c","excerpt":""}]}`, &rec)
+	got, err := c.Search(context.Background(), "title ~ b", 10, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].Title != "abc" {
+		t.Fatalf("title = %q", got[0].Title)
+	}
+}
