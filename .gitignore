@@ -32,7 +32,7 @@ go.work.sum
 # .vscode/
 
 # Built binary
-confluence
+/confluence
 confluence-*
 
 # Recording output

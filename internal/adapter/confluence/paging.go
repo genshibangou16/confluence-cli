@@ -1,0 +1,88 @@
+package confluence
+
+import (
+	"context"
+	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+const (
+	maxPageSizeV2 = 250
+	maxPageSizeV1 = 100
+)
+
+var linkNextRe = regexp.MustCompile(`<([^>]*)>\s*;[^,]*\brel="?next"?`)
+
+// collectV2 は v2 API の一覧を取得する。次ページは Link ヘッダーの rel="next" で辿る。
+// limit が正なら limit 件で打ち切り、all が false で limit が 0 以下なら 1 ページだけ取得する。
+func collectV2[T any](ctx context.Context, c *Client, ep endpoint, q url.Values, limit int, all bool) ([]T, error) {
+	return collect[T](ctx, c, ep, q, limit, all, maxPageSizeV2, true)
+}
+
+// collectV1 は v1 API の一覧を取得する。次ページは応答の _links.next で辿り、
+// 値が /wiki/ で始まらなければ /wiki を前に付ける。
+func collectV1[T any](ctx context.Context, c *Client, ep endpoint, q url.Values, limit int, all bool) ([]T, error) {
+	return collect[T](ctx, c, ep, q, limit, all, maxPageSizeV1, false)
+}
+
+type page[T any] struct {
+	Results []T `json:"results"`
+	Links   struct {
+		Next string `json:"next"`
+	} `json:"_links"`
+}
+
+func collect[T any](ctx context.Context, c *Client, ep endpoint, q url.Values, limit int, all bool, maxSize int, useHeader bool) ([]T, error) {
+	query := url.Values{}
+	for k, v := range q {
+		query[k] = v
+	}
+	if limit > 0 {
+		query.Set("limit", strconv.Itoa(min(limit, maxSize)))
+	}
+
+	var items []T
+	for {
+		var p page[T]
+		h, err := c.do(ctx, ep, query, nil, &p)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, p.Results...)
+		if limit > 0 && len(items) >= limit {
+			return items[:limit], nil
+		}
+		if limit <= 0 && !all {
+			return items, nil
+		}
+
+		var next string
+		if useHeader {
+			next = nextFromLinkHeader(h.Get("Link"))
+		} else {
+			next = p.Links.Next
+			if next != "" && !strings.HasPrefix(next, "/wiki/") {
+				next = "/wiki" + next
+			}
+		}
+		if next == "" {
+			return items, nil
+		}
+		u, err := url.Parse(next)
+		if err != nil {
+			return nil, err
+		}
+		ep.path = u.Path
+		query = u.Query()
+	}
+}
+
+func nextFromLinkHeader(v string) string {
+	m := linkNextRe.FindStringSubmatch(v)
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
