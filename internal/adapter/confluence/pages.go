@@ -214,7 +214,7 @@ func (c *Client) Children(ctx context.Context, id domain.PageID, limit int, all 
 	return summaries(items), nil
 }
 
-// Ancestors は祖先をルートに近い順で返す。API の応答は ID と種別だけなので Title は空になる。
+// Ancestors は祖先をルートに近い順で返す。API はカーソルによるページングを持たず、limit の既定が 25 なので、上限の 250 を指定する。API の応答は ID と種別だけなので Title は空になる。
 func (c *Client) Ancestors(ctx context.Context, id domain.PageID) ([]domain.Ancestor, error) {
 	ep := epAncestors
 	ep.path = pagePath(id, "/ancestors")
@@ -222,7 +222,7 @@ func (c *Client) Ancestors(ctx context.Context, id domain.PageID) ([]domain.Ance
 		ID   string `json:"id"`
 		Type string `json:"type"`
 	}
-	items, err := collectV2[item](ctx, c, ep, nil, 0, true)
+	items, err := collectV2[item](ctx, c, ep, url.Values{"limit": {strconv.Itoa(maxPageSizeV2)}}, 0, true)
 	if err != nil {
 		return nil, err
 	}

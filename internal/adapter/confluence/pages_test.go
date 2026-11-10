@@ -214,6 +214,9 @@ func TestAncestors_Order(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []domain.Ancestor{{ID: "1", Type: "folder"}, {ID: "2", Type: "page"}}
+	if rec[0].query["limit"][0] != "250" {
+		t.Errorf("limit=%v", rec[0].query["limit"])
+	}
 	if rec[0].path != "/wiki/api/v2/pages/3/ancestors" || !reflect.DeepEqual(got, want) {
 		t.Errorf("%s %+v", rec[0].path, got)
 	}
