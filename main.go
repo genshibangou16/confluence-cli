@@ -1,9 +1,11 @@
 package main
 
 import (
-	"github.com/genshibangou16/confluence-cli/cmd"
+	"os"
+
+	"github.com/genshibangou16/confluence-cli/internal/cli"
 )
 
 func main() {
-	cmd.Execute()
+	os.Exit(cli.Execute())
 }
