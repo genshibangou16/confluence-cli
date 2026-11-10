@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,8 +110,8 @@ api_token_command を設定済みなら、API トークンは尋ねない。`,
 			if fc.BaseURL, err = p.line("Base URL（例: https://example.atlassian.net/wiki）", defBase); err != nil {
 				return err
 			}
-			if fc.BaseURL == "" {
-				return validationf("base_url を入力する")
+			if err := config.ValidateBaseURL(fc.BaseURL); err != nil {
+				return err
 			}
 			if fc.Email, err = p.line("Email", fc.Email); err != nil {
 				return err
@@ -162,7 +163,15 @@ func newConfigInitLocalCmd(d Deps) *cobra.Command {
 		RunE: func(_ *cobra.Command, _ []string) error {
 			path := filepath.Join(d.Sources.Cwd, config.LocalConfigName)
 			p := newPrompter(d)
-			if _, err := os.Lstat(path); err == nil {
+			li, err := os.Lstat(path)
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+			case err != nil:
+				return err
+			case !li.Mode().IsRegular():
+				// シンボリックリンクの先（ユーザー設定など）を書き換えないため、通常ファイル以外は上書きしない。
+				return validationf("%s が通常のファイルではないため書き込まない", path)
+			default:
 				ok, err := p.confirm(fmt.Sprintf("%s を上書きしますか？", path))
 				if err != nil {
 					return err
@@ -179,21 +188,44 @@ func newConfigInitLocalCmd(d Deps) *cobra.Command {
 			if !config.IsAtlassianNetHTTPS(base) {
 				return validationf("ローカル設定の base_url には https の *.atlassian.net の URL だけを指定できる")
 			}
-			data, err := yaml.Marshal(config.FileConfig{BaseURL: base})
+			// email などの空のキーを書かないよう、base_url だけの構造体にする。
+			data, err := yaml.Marshal(struct {
+				BaseURL string `yaml:"base_url"`
+			}{base})
 			if err != nil {
 				return err
 			}
-			// 他のユーザーが書き換えられるローカル設定は読み込み時にスキップされるため、グループとその他には書き込み権限を付けない。
-			if err := os.WriteFile(path, data, 0o644); err != nil {
-				return err
-			}
-			if err := os.Chmod(path, 0o644); err != nil {
+			if err := writeLocalConfig(path, data); err != nil {
 				return err
 			}
 			fmt.Fprintf(d.Stdout, "ローカル設定を保存しました: %s\n", path)
 			return nil
 		},
 	}
+}
+
+// writeLocalConfig は同じディレクトリの一時ファイルに書いてから path へ rename する。
+// rename は path がシンボリックリンクでもリンク自体を置き換えるため、Lstat の検査の後にリンクへ差し替えられても
+// リンク先は書き換わらない。
+// 他のユーザーが書き換えられるローカル設定は読み込み時にスキップされるため、パーミッションは 0644 にする。
+func writeLocalConfig(path string, data []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), ".confluence-cli-*.yaml")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Chmod(0o644); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), path)
 }
 
 func maskToken(t string) string {

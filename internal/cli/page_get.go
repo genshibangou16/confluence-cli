@@ -79,6 +79,7 @@ func newPageGetCmd(d Deps) *cobra.Command {
 				})
 			}
 			fmt.Fprintf(d.Stderr, "version: %d\n", p.Version.Number)
+			// 出力を page update --body-file にそのまま渡せるよう、本文は SanitizeText を通さない。
 			content := v.Content
 			if !strings.HasSuffix(content, "\n") {
 				content += "\n"

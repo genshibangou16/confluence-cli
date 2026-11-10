@@ -230,9 +230,8 @@ func Load(src Sources) (Settings, []string, error) {
 	if s.BaseURL == "" {
 		return Settings{}, warns, validation("base_url が未設定（設定ファイルか環境変数 CONFLUENCE_BASE_URL で指定する）")
 	}
-	u, err := url.Parse(s.BaseURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
-		return Settings{}, warns, validation("base_url は認証情報を含まない https の URL だけを指定できる")
+	if err := ValidateBaseURL(s.BaseURL); err != nil {
+		return Settings{}, warns, err
 	}
 	s.BaseURL = strings.TrimRight(s.BaseURL, "/")
 
@@ -273,6 +272,16 @@ func first(vs ...string) string {
 		}
 	}
 	return ""
+}
+
+// ValidateBaseURL は base_url として受け付ける URL かを検査する。
+// 認証情報を平文で送らないよう https だけを受け付け、URL に埋め込んだ認証情報は拒否する。
+func ValidateBaseURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+		return validation("base_url は認証情報を含まない https の URL だけを指定できる")
+	}
+	return nil
 }
 
 // IsAtlassianNetHTTPS は raw が認証情報を含まない https の *.atlassian.net の URL かを返す。

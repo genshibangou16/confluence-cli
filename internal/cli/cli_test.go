@@ -321,3 +321,21 @@ func TestSearch_RequiresQueryOrFilter(t *testing.T) {
 		t.Fatalf("requests = %v, stderr = %q", e.rec.reqs, e.stderr)
 	}
 }
+
+func TestSearch_CQLTypeOnlyWhenExplicit(t *testing.T) {
+	for _, tt := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"search", "--cql", "space = DEV"}, "space = DEV"},
+		{[]string{"search", "--cql", "space = DEV", "--type", "blogpost"}, `(space = DEV) AND type = "blogpost"`},
+	} {
+		e := newEnv(t, map[string]http.HandlerFunc{"/wiki/rest/api/search": reply(`{"results":[]}`)})
+		if code := e.run(tt.args...); code != 0 {
+			t.Fatalf("%v: code = %d, stderr = %s", tt.args, code, e.stderr)
+		}
+		if got := e.rec.find("/wiki/rest/api/search").Query().Get("cql"); got != tt.want {
+			t.Errorf("%v: cql = %q", tt.args, got)
+		}
+	}
+}

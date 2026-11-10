@@ -462,3 +462,14 @@ func TestIsAtlassianNetHTTPS(t *testing.T) {
 		t.Fatal("unexpected result")
 	}
 }
+
+func TestValidateBaseURL(t *testing.T) {
+	if err := ValidateBaseURL("https://a.example.com/wiki"); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{"", "http://a.example.com", "https://u:p@a.example.com", "https://", "::"} {
+		if err := ValidateBaseURL(raw); domain.KindOf(err) != domain.ErrValidation {
+			t.Errorf("%q: err = %v", raw, err)
+		}
+	}
+}
