@@ -63,12 +63,12 @@ func Build(f Filter) (string, error) {
 
 	if raw := strings.TrimSpace(f.RawCQL); raw != "" {
 		// ORDER BY の後ろに AND を連結すると不正な CQL になるため、条件部と並び順部に分ける。
-		if loc := orderByRe.FindStringIndex(raw); loc != nil {
+		if at := lastOrderBy(raw); at >= 0 {
 			if f.Sort != SortRelevance {
 				return "", validation("RawCQL に ORDER BY が含まれているため、並び順を同時に指定できません")
 			}
-			orderBy = " " + strings.TrimSpace(raw[loc[0]:])
-			raw = strings.TrimSpace(raw[:loc[0]])
+			orderBy = " " + strings.TrimSpace(raw[at:])
+			raw = strings.TrimSpace(raw[:at])
 		}
 		if raw != "" {
 			conds = append(conds, raw)
@@ -124,6 +124,41 @@ func Build(f Filter) (string, error) {
 		orderBy = " ORDER BY lastmodified DESC"
 	}
 	return strings.Join(conds, " AND ") + orderBy, nil
+}
+
+// lastOrderBy は、文字列リテラルの外にある最後の ORDER BY の開始位置を返す。無ければ -1 を返す。
+// `title ~ "order by"` のようにリテラルの中にある ORDER BY で分けると、リテラルが途中で切れて不正な CQL になる。
+// リテラルは `"` か `'` で囲み、中の `\` は次の 1 文字をエスケープする。
+func lastOrderBy(raw string) int {
+	inLiteral := make([]bool, len(raw))
+	var quote byte
+	for i := 0; i < len(raw); i++ {
+		c := raw[i]
+		switch {
+		case quote == 0:
+			if c == '"' || c == '\'' {
+				quote = c
+			}
+		case c == '\\':
+			inLiteral[i] = true
+			if i+1 < len(raw) {
+				i++
+				inLiteral[i] = true
+			}
+			continue
+		case c == quote:
+			quote = 0
+		}
+		inLiteral[i] = quote != 0
+	}
+	// orderByRe に一致する部分は引用符を含まないため、開始位置がリテラルの外なら一致した部分全体がリテラルの外にある。
+	last := -1
+	for _, loc := range orderByRe.FindAllStringIndex(raw, -1) {
+		if !inLiteral[loc[0]] {
+			last = loc[0]
+		}
+	}
+	return last
 }
 
 func modeField(m Mode) (string, error) {
