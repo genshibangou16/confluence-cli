@@ -13,6 +13,7 @@ var ConvertibleMacros = []string{"code", "info", "tip", "note", "warning", "toc"
 // CountCommentMarkers は fragment に含まれる ac:inline-comment-marker 要素の数を返す。
 // 解析できない箇所に達したら、そこまでの数を返す。
 func CountCommentMarkers(fragment string) int {
+	// 呼び出し側が先に Validate で整形式を確認するため、解析エラーでは部分的な結果を返してよい。
 	d, _ := Decoder(fragment)
 	n := 0
 	for {
@@ -35,6 +36,7 @@ func isAC(n xml.Name, local string) bool {
 // rowspan か colspan が 2 以上のセルを持つ表の table:merged-cells、ac:inline-comment-marker の inline-comment。
 // 解析できない箇所に達したら、そこまでの結果を返す。
 func LossyElements(body string) []string {
+	// 呼び出し側が先に Validate で整形式を確認するため、解析エラーでは部分的な結果を返してよい。
 	d, _ := Decoder(body)
 	var out []string
 	add := func(name string) {
@@ -74,6 +76,22 @@ func LossyElements(body string) []string {
 	}
 }
 
+var blockHTML = []string{"p", "div", "li", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6", "td", "th", "tr", "table", "blockquote", "pre", "br", "hr"}
+
+var blockAC = []string{"structured-macro", "parameter", "plain-text-body", "rich-text-body", "task", "task-body", "task-list", "layout", "layout-section", "layout-cell"}
+
+// isBlock は、前後のテキストを別の語に分ける要素かを返す。
+// インライン要素は語の途中にも現れ、保存時に境界が移ることがあるため、区切りに使わない。
+func isBlock(n xml.Name) bool {
+	switch n.Space {
+	case "":
+		return slices.Contains(blockHTML, n.Local)
+	case acNamespace:
+		return slices.Contains(blockAC, n.Local)
+	}
+	return false
+}
+
 // textWords は body の文字データ（CDATA と ac:parameter の値を含む）を空白で分けた語の並びを返す。
 // &nbsp; は Decoder が U+00A0 に展開し、strings.Fields が空白として扱う。
 // 解析できない箇所に達したら、そこまでの語を返す。
@@ -85,11 +103,17 @@ func textWords(body string) []string {
 		if err != nil {
 			return strings.Fields(sb.String())
 		}
-		if cd, ok := tok.(xml.CharData); ok {
-			sb.Write(cd)
-		} else {
-			// 隣り合う段落のテキストが連結して 1 語にならないよう、タグの位置で区切る。
-			sb.WriteByte(' ')
+		switch tok := tok.(type) {
+		case xml.CharData:
+			sb.Write(tok)
+		case xml.StartElement:
+			if isBlock(tok.Name) {
+				sb.WriteByte(' ')
+			}
+		case xml.EndElement:
+			if isBlock(tok.Name) {
+				sb.WriteByte(' ')
+			}
 		}
 	}
 }

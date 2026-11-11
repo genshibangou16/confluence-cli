@@ -91,3 +91,18 @@ func TestLostText_ParameterAndMalformed(t *testing.T) {
 		t.Errorf("lost = %v", lost)
 	}
 }
+
+func TestLostText_InlineBoundaries(t *testing.T) {
+	cases := [][2]string{
+		{`<p>a<b>b</b>c</p>`, `<p><b>ab</b>c</p>`},
+		{`<p>ab<ac:inline-comment-marker ac:ref="x">cd</ac:inline-comment-marker>ef</p>`, `<p>abc<ac:inline-comment-marker ac:ref="x">d</ac:inline-comment-marker>ef</p>`},
+	}
+	for _, c := range cases {
+		if lost := LostText(c[0], c[1]); len(lost) != 0 {
+			t.Errorf("LostText(%q, %q) = %v", c[0], c[1], lost)
+		}
+	}
+	if lost := LostText(`<p>a<b>b</b>c</p><p>x</p>`, `<p>abc</p>`); !reflect.DeepEqual(lost, []string{"x"}) {
+		t.Errorf("lost = %v", lost)
+	}
+}
