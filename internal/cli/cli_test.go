@@ -180,23 +180,111 @@ func TestPageGet_StorageToStdoutVersionToStderr(t *testing.T) {
 	}
 }
 
-func TestPageGet_JSONIncludesVersion(t *testing.T) {
-	e := newEnv(t, map[string]http.HandlerFunc{"/wiki/api/v2/pages/1234567890": reply(pageBody)})
-	if code := e.run("page", "get", "1234567890", "--format", "json"); code != 0 {
+const headingPageBody = `{"id":"1234567890","title":"T","status":"current","spaceId":"10","version":{"number":7},"_links":{"webui":"/spaces/X/pages/1234567890"},"body":{"storage":{"value":"<h1>A</h1><p>a1</p><h2>A-1</h2><p>a2</p><h1>B</h1><p>b1</p>"}}}`
+
+func headingEnv(t *testing.T) *env {
+	return newEnv(t, map[string]http.HandlerFunc{"/wiki/api/v2/pages/1234567890": reply(headingPageBody)})
+}
+
+func TestPageGet_MarkdownHeader(t *testing.T) {
+	e := headingEnv(t)
+	if code := e.run("page", "get", "1234567890"); code != 0 {
 		t.Fatalf("code = %d, stderr = %s", code, e.stderr)
 	}
-	var got struct {
-		ID      string `json:"id"`
-		Version struct {
-			Number int `json:"number"`
-		} `json:"version"`
-		Body string `json:"body"`
+	lines := strings.Split(e.stdout.String(), "\n")
+	want := []string{"id: 1234567890", "title: T", "version: 7"}
+	for i, w := range want {
+		if lines[i] != w {
+			t.Fatalf("line %d = %q, want %q", i, lines[i], w)
+		}
 	}
-	if err := json.Unmarshal(e.stdout.Bytes(), &got); err != nil {
-		t.Fatalf("%v: %q", err, e.stdout)
+	if !strings.HasPrefix(lines[3], "url: ") || lines[4] != "---" || lines[5] != "# A" {
+		t.Fatalf("stdout = %q", e.stdout)
 	}
-	if got.ID != "1234567890" || got.Version.Number != 7 || got.Body != "<p>本文</p>" {
+	if e.stderr.Len() != 0 {
+		t.Fatalf("stderr = %q", e.stderr)
+	}
+}
+
+func TestPageGet_Outline(t *testing.T) {
+	e := headingEnv(t)
+	if code := e.run("page", "get", "1234567890", "--outline"); code != 0 {
+		t.Fatalf("code = %d, stderr = %s", code, e.stderr)
+	}
+	lines := strings.Split(strings.TrimRight(e.stdout.String(), "\n"), "\n")
+	if len(lines) != 7 || lines[4] != "- A" || lines[5] != "  - A-1" || lines[6] != "- B" {
+		t.Fatalf("stdout = %q", e.stdout)
+	}
+}
+
+func TestPageGet_SectionStorageExact(t *testing.T) {
+	e := headingEnv(t)
+	if code := e.run("page", "get", "1234567890", "--format", "storage", "--section", "B"); code != 0 {
+		t.Fatalf("code = %d, stderr = %s", code, e.stderr)
+	}
+	if e.stdout.String() != "<p>b1</p>" || !strings.Contains(e.stderr.String(), "version: 7\n") {
+		t.Fatalf("stdout = %q, stderr = %q", e.stdout, e.stderr)
+	}
+}
+
+func TestPageGet_InvalidCombinations(t *testing.T) {
+	for _, args := range [][]string{
+		{"--outline", "--section", "A"},
+		{"--content-format", "storage"},
+		{"--format", "storage", "--content-format", "storage"},
+		{"--format", "json", "--content-format", "html"},
+		{"--section", "none"},
+	} {
+		e := headingEnv(t)
+		if code := e.run(append([]string{"page", "get", "1234567890"}, args...)...); code != 1 {
+			t.Errorf("%v: code = %d", args, code)
+		}
+		if e.stdout.Len() != 0 {
+			t.Errorf("%v: stdout = %q", args, e.stdout)
+		}
+	}
+}
+
+func TestPageGet_JSON(t *testing.T) {
+	type out struct {
+		ID, Title, Status, SpaceID, URL string
+		Version                        int
+		Content                        *string
+		Outline                        []struct {
+			Level int
+			Text  string
+		}
+	}
+	run := func(args ...string) (out, string) {
+		e := headingEnv(t)
+		if code := e.run(append([]string{"page", "get", "1234567890", "--format", "json"}, args...)...); code != 0 {
+			t.Fatalf("%v: code = %d, stderr = %s", args, code, e.stderr)
+		}
+		var got out
+		if err := json.Unmarshal(e.stdout.Bytes(), &got); err != nil {
+			t.Fatalf("%v: %q", err, e.stdout)
+		}
+		if strings.Count(strings.TrimRight(e.stdout.String(), "\n"), "\n") != 0 {
+			t.Fatalf("not single line: %q", e.stdout)
+		}
+		return got, e.stdout.String()
+	}
+	got, raw := run()
+	if got.ID != "1234567890" || got.Version != 7 || got.SpaceID != "10" || got.Status != "current" ||
+		got.Content == nil || !strings.HasPrefix(*got.Content, "# A\n") || !strings.Contains(raw, `"spaceId"`) {
 		t.Fatalf("got %+v", got)
+	}
+	got, _ = run("--content-format", "storage")
+	if got.Content == nil || !strings.HasPrefix(*got.Content, "<h1>A</h1>") {
+		t.Fatalf("storage: %+v", got)
+	}
+	got, raw = run("--section", "B")
+	if got.Content == nil || *got.Content != "b1\n" {
+		t.Fatalf("section: %+v", got)
+	}
+	got, raw = run("--outline")
+	if got.Content != nil || len(got.Outline) != 3 || strings.Contains(raw, `"content"`) || got.Outline[1].Level != 2 {
+		t.Fatalf("outline: %+v", got)
 	}
 }
 
