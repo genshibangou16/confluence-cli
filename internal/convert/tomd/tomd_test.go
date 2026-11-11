@@ -228,3 +228,19 @@ func TestConvert_InlineMacroTitles(t *testing.T) {
 		}
 	}
 }
+
+func TestConvert_HeadingBrMatchesStorageHeadingText(t *testing.T) {
+	// page get --outline と --section が使う storage.Headings の文字列と、Markdown の見出しの文字列を一致させる。
+	in := `<h2>A<br/>B</h2>`
+	got, err := Convert(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hs, err := storage.Headings(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "## "+hs[0].Text+"\n" {
+		t.Errorf("got %q, heading text %q", got, hs[0].Text)
+	}
+}

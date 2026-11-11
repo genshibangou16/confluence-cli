@@ -371,3 +371,16 @@ func TestHeadingsAndFindSection_ClosingWrapperIsError(t *testing.T) {
 	_, err = FindSection(body, "X")
 	wantValidation(t, err)
 }
+
+func TestHeadings_BrIsSpace(t *testing.T) {
+	hs, err := Headings(`<h2>A<br/>B</h2><h2>C<br />D</h2>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hs) != 2 || hs[0].Text != "A B" || hs[1].Text != "C D" {
+		t.Fatalf("headings = %+v", hs)
+	}
+	if _, err := FindSection(`<h2>A<br/>B</h2><p>x</p>`, "A B"); err != nil {
+		t.Fatal(err)
+	}
+}

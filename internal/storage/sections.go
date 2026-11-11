@@ -10,7 +10,7 @@ import (
 )
 
 // Heading は本文中の見出し要素。Start と End は開始タグの先頭と終了タグの末尾のバイト位置で、
-// Text はタグを除いて空白をまとめた文字列。TopLevel は、親が本文のルートか ac:layout-cell であることを表す。
+// Text はタグを除き、br を空白にして空白をまとめた文字列。TopLevel は、親が本文のルートか ac:layout-cell であることを表す。
 type Heading struct {
 	Level      int
 	Text       string
@@ -67,6 +67,10 @@ func parse(body string) (*tree, error) {
 			if len(stack) > 0 {
 				e.parent = stack[len(stack)-1]
 				t.elems[e.parent].children = append(t.elems[e.parent].children, idx)
+			}
+			// tomd は見出しの中の br を空白にするため、見出しの文字列でも空白として扱う。
+			if inHeading >= 0 && tok.Name.Space == "" && tok.Name.Local == "br" {
+				t.elems[inHeading].text.WriteByte(' ')
 			}
 			if e.level > 0 {
 				e.minLevel = e.level
