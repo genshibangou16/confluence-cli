@@ -483,7 +483,7 @@ func TestE2E_SearchReadOnly(t *testing.T) {
 	e := setup(t)
 	var hs []struct {
 		ID       string `json:"id"`
-		SpaceKey string `json:"space_key"`
+		SpaceKey string `json:"spaceKey"`
 	}
 	decode(t, e.mustRun(t, "search", "--cql", "id = "+e.root, "--format", "json"), &hs)
 	if len(hs) != 1 || hs[0].ID != e.root || hs[0].SpaceKey == "" {

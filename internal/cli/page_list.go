@@ -11,7 +11,7 @@ type pageSummaryJSON struct {
 	ID      string `json:"id"`
 	Title   string `json:"title"`
 	Status  string `json:"status"`
-	SpaceID string `json:"space_id"`
+	SpaceID string `json:"spaceId"`
 }
 
 // writeSummaries はページの概要の一覧を、format（table か json）に従って書き出す。

@@ -456,3 +456,34 @@ func TestSearch_CQLTypeOnlyWhenExplicit(t *testing.T) {
 		}
 	}
 }
+
+func TestJSON_KeysCamelCase(t *testing.T) {
+	e := newEnv(t, map[string]http.HandlerFunc{
+		"/wiki/rest/api/search":           reply(searchBody),
+		"/wiki/api/v2/pages":              reply(`{"results":[{"id":"123","title":"会議メモ","status":"current","spaceId":"98765"}]}`),
+		"/wiki/api/v2/pages/123/versions": reply(`{"results":[{"number":2,"message":"m","createdAt":"2026-06-10T01:03:37.000Z","authorId":"u1","minorEdit":true}]}`),
+		"/wiki/api/v2/spaces":             reply(`{"results":[{"id":"98765","key":"DEV","name":"Dev"}]}`),
+	})
+	for _, c := range []struct {
+		args []string
+		want []string
+	}{
+		{[]string{"search", "議事", "--title"}, []string{`"spaceKey":"DEV"`, `"spaceId":"98765"`, `"lastModified":"2026-06-10T01:03:37Z"`}},
+		{[]string{"page", "list", "--space-key", "DEV"}, []string{`"spaceId":"98765"`}},
+		{[]string{"page", "versions", "123"}, []string{`"createdAt":"2026-06-10T01:03:37Z"`, `"authorId":"u1"`, `"minorEdit":true`}},
+	} {
+		e.stdout.Reset()
+		if code := e.run(append(c.args, "--format", "json")...); code != 0 {
+			t.Fatalf("%v: code = %d, stderr = %s", c.args, code, e.stderr)
+		}
+		out := e.stdout.String()
+		for _, w := range c.want {
+			if !strings.Contains(out, w) {
+				t.Errorf("%v: stdout に %s がない: %s", c.args, w, out)
+			}
+		}
+		if strings.Contains(out, `_`) {
+			t.Errorf("%v: stdout に _ を含むキーがある: %s", c.args, out)
+		}
+	}
+}

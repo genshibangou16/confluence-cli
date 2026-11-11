@@ -104,6 +104,8 @@ base_url: https://example.atlassian.net/wiki
 
 引数の `<page>` には、ページ ID、ページの URL、短縮 URL（`/wiki/x/...`）のいずれかを指定できる。詳しいフラグは各コマンドの `--help` で確認できる。
 
+`--format json` の出力は 1 行の JSON で、キーは camelCase（`spaceId`、`spaceKey`、`lastModified`、`createdAt` など）。
+
 ### search
 
 ```bash

@@ -17,11 +17,11 @@ type searchHitJSON struct {
 	ID           string `json:"id"`
 	Title        string `json:"title"`
 	Type         string `json:"type"`
-	SpaceKey     string `json:"space_key"`
-	SpaceID      string `json:"space_id,omitempty"`
+	SpaceKey     string `json:"spaceKey"`
+	SpaceID      string `json:"spaceId,omitempty"`
 	Excerpt      string `json:"excerpt"`
 	URL          string `json:"url"`
-	LastModified string `json:"last_modified,omitempty"`
+	LastModified string `json:"lastModified,omitempty"`
 }
 
 func newSearchCmd(d Deps) *cobra.Command {

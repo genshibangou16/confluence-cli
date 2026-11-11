@@ -16,9 +16,9 @@ import (
 type versionJSON struct {
 	Number    int    `json:"number"`
 	Message   string `json:"message,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-	AuthorID  string `json:"author_id,omitempty"`
-	MinorEdit bool   `json:"minor_edit"`
+	CreatedAt string `json:"createdAt,omitempty"`
+	AuthorID  string `json:"authorId,omitempty"`
+	MinorEdit bool   `json:"minorEdit"`
 }
 
 func toVersionJSON(v domain.Version) versionJSON {
