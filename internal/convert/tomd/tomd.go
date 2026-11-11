@@ -569,17 +569,26 @@ func macroInline(n *node) string {
 	if rb := n.acChild("rich-text-body"); rb != nil {
 		body = inline(rb.children)
 	}
+	title := strings.TrimSpace(collapseSpace(macroParam(n, "title")))
 	switch name {
 	case "code":
-		return codeSpan(collapseSpace(plainBody(n)))
+		code := codeSpan(collapseSpace(plainBody(n)))
+		if title == "" {
+			return code
+		}
+		return "[code title=" + quoteParam(title) + "] " + code
 	case "toc":
 		return "[TOC]"
 	}
 	if kind, ok := convert.PanelToAlert[name]; ok {
-		if body = strings.Join(lines(body), " "); body == "" {
+		parts := strings.Join(lines(body), " ")
+		if title != "" {
+			parts = strings.TrimSpace("**" + title + "** " + parts)
+		}
+		if parts == "" {
 			return "[" + kind + "]"
 		}
-		return "[" + kind + ": " + body + "]"
+		return "[" + kind + ": " + parts + "]"
 	}
 	s := placeholder(n)
 	if pb := n.acChild("plain-text-body"); pb != nil {
@@ -619,17 +628,22 @@ func placeholder(n *node) string {
 		if value == "" {
 			continue
 		}
-		if strings.ContainsAny(value, " \"]") {
-			value = strconv.Quote(value)
-		}
 		sb.WriteByte(' ')
 		if key != "" {
 			sb.WriteString(key + "=")
 		}
-		sb.WriteString(value)
+		sb.WriteString(quoteParam(value))
 	}
 	sb.WriteByte(']')
 	return sb.String()
+}
+
+// quoteParam は、パラメータの値が空白・引用符・角括弧を含むときに引用符で囲み、[name key=value] の区切りと区別できるようにする。
+func quoteParam(v string) string {
+	if strings.ContainsAny(v, " \"]") {
+		return strconv.Quote(v)
+	}
+	return v
 }
 
 func titled(title, s string) string {

@@ -189,3 +189,42 @@ func TestConvert_ClosingWrapperIsError(t *testing.T) {
 		t.Errorf("got %q, want error", got)
 	}
 }
+
+func TestConvert_InlineMacroTitles(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{
+			"panel with title",
+			`<p>前 <ac:structured-macro ac:name="info"><ac:parameter ac:name="title">タイトル</ac:parameter><ac:rich-text-body>本文</ac:rich-text-body></ac:structured-macro> 後</p>`,
+			"前 [NOTE: **タイトル** 本文] 後\n",
+		},
+		{
+			"panel with title only",
+			`<p><ac:structured-macro ac:name="info"><ac:parameter ac:name="title">T</ac:parameter></ac:structured-macro></p>`,
+			"[NOTE: **T**]\n",
+		},
+		{
+			"code with title",
+			`<p>前 <ac:structured-macro ac:name="code"><ac:parameter ac:name="title">T</ac:parameter><ac:plain-text-body><![CDATA[x]]></ac:plain-text-body></ac:structured-macro></p>`,
+			"前 [code title=T] `x`\n",
+		},
+		{
+			"code with spaced title",
+			`<p><ac:structured-macro ac:name="code"><ac:parameter ac:name="title">a b</ac:parameter><ac:plain-text-body><![CDATA[x]]></ac:plain-text-body></ac:structured-macro></p>`,
+			"[code title=\"a b\"] `x`\n",
+		},
+		{
+			"code without title",
+			`<p><ac:structured-macro ac:name="code"><ac:plain-text-body><![CDATA[x]]></ac:plain-text-body></ac:structured-macro></p>`,
+			"`x`\n",
+		},
+	}
+	for _, tc := range cases {
+		got, err := Convert(tc.in)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
