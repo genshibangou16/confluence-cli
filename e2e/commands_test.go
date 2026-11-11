@@ -57,6 +57,7 @@ func TestE2E_Guard(t *testing.T) {
 	t.Run("parent-flag", func(t *testing.T) {
 		refused(t, e.root, "page", "create", "--title", "x", "--body", "<p>x</p>", "--parent", as[len(as)-1].ID)
 	})
+	t.Run("root-update", func(t *testing.T) { refused(t, e.root, dryRun...) })
 	t.Run("read-command", func(t *testing.T) { refused(t, e.root, "page", "get") })
 	t.Run("run-refuses-write", func(t *testing.T) {
 		if _, _, code := e.run("page", "update", as[len(as)-1].ID, "--dry-run", "--body", "<p>x</p>"); code != -1 {

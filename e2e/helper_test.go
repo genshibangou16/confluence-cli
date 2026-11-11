@@ -67,6 +67,9 @@ type env struct {
 	created []string
 	// executed は最後に実行したコマンドの引数。ガードがコマンドを実行しなかったことの確認に使う。
 	executed []string
+	// restoringRoot は、後片付けでテストルートを開始時の状態に戻している間だけ true。
+	// このときに限り、テストルート自体を page update の対象にできる。
+	restoringRoot bool
 }
 
 // setup は CONFLUENCE_E2E_ROOT がなければテストをスキップする。
@@ -85,7 +88,30 @@ func setup(t *testing.T) *env {
 	e.rootBody = e.storage(t, root)
 	e.rootVersion = e.version(t, root)
 	t.Cleanup(func() { e.cleanup(t) })
+	e.removeLeftovers(t)
 	return e
+}
+
+// removeLeftovers は、中断した実行が残した e2e- で始まるテストルートの子ページを削除する。
+// 後片付けは実行ごとの接頭辞で照合するため、中断した実行のページは後片付けでは見つからない。
+func (e *env) removeLeftovers(t *testing.T) {
+	t.Helper()
+	var cs []struct {
+		ID    string `json:"id"`
+		Title string `json:"title"`
+	}
+	decode(t, e.mustRun(t, "page", "children", e.root, "--all", "--format", "json"), &cs)
+	n := 0
+	for _, c := range cs {
+		if !strings.HasPrefix(c.Title, "e2e-") {
+			continue
+		}
+		e.mustWrite(t, c.ID, "page", "delete")
+		n++
+	}
+	if n > 0 {
+		t.Logf("setup: 中断した実行が残した子ページを %d 件削除した", n)
+	}
 }
 
 func isPageID(s string) bool {
@@ -99,14 +125,6 @@ func (e *env) run(args ...string) (stdout, stderr string, code int) {
 		return "", "e2e: 書き込み系のコマンドは env.write で実行する", -1
 	}
 	return e.exec("", args...)
-}
-
-// runIn は標準入力を渡して読み取り系のコマンドを実行する。
-func (e *env) runIn(stdin string, args ...string) (stdout, stderr string, code int) {
-	if isWriteCommand(args) {
-		return "", "e2e: 書き込み系のコマンドは env.write で実行する", -1
-	}
-	return e.exec(stdin, args...)
 }
 
 func (e *env) exec(stdin string, args ...string) (stdout, stderr string, code int) {
@@ -160,7 +178,7 @@ func (e *env) writeIn(t *testing.T, target, stdin string, args ...string) (stdou
 func (e *env) guardedWrite(fail fatalf, target, stdin string, args ...string) (stdout, stderr string, code int) {
 	full, err := e.writeArgs(target, args)
 	if err == nil {
-		err = e.checkWritable(target)
+		err = e.checkTarget(target, args)
 	}
 	if err != nil {
 		fail("e2e: 書き込みを実行しない: %v", err)
@@ -188,6 +206,15 @@ func (e *env) writeArgs(target string, args []string) ([]string, error) {
 		return append(append([]string{}, args...), "--parent", target), nil
 	}
 	return append([]string{args[0], args[1], target}, args[2:]...), nil
+}
+
+// checkTarget は、テストルート自体を対象にできる場合を絞ったうえで checkWritable を呼ぶ。
+// テストルート自体は、page create の親と、後片付けでの復元だけが対象にできる。
+func (e *env) checkTarget(target string, args []string) error {
+	if target == e.root && args[0]+" "+args[1] != "page create" && !e.restoringRoot {
+		return fmt.Errorf("テストルート自体は %q の対象にできない", args[0]+" "+args[1])
+	}
+	return e.checkWritable(target)
 }
 
 // checkWritable は target がテストルートか、祖先にテストルートを含むページなら nil を返す。
@@ -414,12 +441,20 @@ func (e *env) checkRoot(t *testing.T) {
 	if p.Title == e.rootTitle && p.Content == e.rootBody {
 		return
 	}
+	e.restoringRoot = true
+	defer func() { e.restoringRoot = false }()
+	logErr := func(format string, args ...any) { t.Errorf(format, args...) }
 	if strings.TrimSpace(e.rootBody) == "" {
-		// page update は本文全体を空にする更新を拒否するため、CLI では空の本文に戻せない。
-		t.Errorf("後片付け: テストルートのタイトルか本文が変わったが、開始時の本文が空のため CLI では戻せない。Web UI で戻す")
+		// page update は本文全体を空にする更新を拒否するため、本文が変わっていれば CLI では空に戻せない。
+		if p.Content != e.rootBody {
+			t.Errorf("後片付け: テストルートの本文が変わったが、開始時の本文が空のため CLI では戻せない。Web UI で戻す")
+			return
+		}
+		if _, errOut, code := e.guardedWrite(logErr, e.root, "", "page", "update", "--title", e.rootTitle); code != 0 {
+			t.Errorf("後片付け: テストルートのタイトルを戻せない: %s", errOut)
+		}
 		return
 	}
-	logErr := func(format string, args ...any) { t.Errorf(format, args...) }
 	if _, errOut, code := e.guardedWrite(logErr, e.root, e.rootBody, "page", "update", "--title", e.rootTitle,
 		"--body-file", "-", "--allow-drop-comments", "--allow-lossy"); code != 0 {
 		t.Errorf("後片付け: テストルートを戻せない: %s", errOut)
