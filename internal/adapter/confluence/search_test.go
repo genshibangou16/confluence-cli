@@ -64,3 +64,36 @@ func TestSearch_StripsHighlightFromTitleAndExcerpt(t *testing.T) {
 		t.Fatalf("title = %q, excerpt = %q", got[0].Title, got[0].Excerpt)
 	}
 }
+
+func TestSearch_DecodesEscapedSurrogatePairsInExcerpt(t *testing.T) {
+	var rec []recorded
+	c := recordingClient(t, 200, `{"results":[{"content":{"id":"1","type":"page"},"title":"t","excerpt":"\\uD83D\\uDDD3 日付"}]}`, &rec)
+	got, err := c.Search(context.Background(), "type = page", 10, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].Excerpt != "🗓 日付" {
+		t.Fatalf("excerpt = %q", got[0].Excerpt)
+	}
+}
+
+func TestDecodeEscapedSurrogatePairs(t *testing.T) {
+	cases := map[string]struct{ in, want string }{
+		"組":          {`🗓`, "🗓"},
+		"連続した 2 組":   {`🗓👥 a`, "🗓👥 a"},
+		"小文字の 16 進数": {`🗣`, "\U0001F5E3"},
+		"上位だけ":       {`\uD83D a`, `\uD83D a`},
+		"下位だけ":       {`a \uDDD3`, `a \uDDD3`},
+		"下位と上位の順":    {`\uDDD3\uD83D`, `\uDDD3\uD83D`},
+		"サロゲート以外":    {`Aあ`, `Aあ`},
+		"4 桁に満たない":   {`\uD83D\uDDD`, `\uD83D\uDDD`},
+		"エスケープなし":    {"日付 🗓", "日付 🗓"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := decodeEscapedSurrogatePairs(c.in); got != c.want {
+				t.Fatalf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
