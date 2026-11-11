@@ -31,6 +31,9 @@ type Deps struct {
 	Stdin    io.Reader
 	// IsTerminal は出力先が端末かを返す。nil なら isTerminal を使う。
 	IsTerminal func(io.Writer) bool
+
+	// warnings は run が設定する。nil なら警告を常にテキストで出す。
+	warnings *warningLog
 }
 
 func (d Deps) isTerminal(w io.Writer) bool {
@@ -64,25 +67,34 @@ func Execute(version string) int {
 }
 
 // run はエラーを output.WriteError で 1 回だけ出し、エラーなら 1 を返す。
-// 実行したコマンドの --format が json なら、エラーも JSON で出す。
+// 実行したコマンドの --format が json なら、エラーも JSON で出し、溜めた警告をエラーの JSON に入れる。
+// 成功したときは、溜めた警告があれば {"warnings":[...]} の 1 行を標準エラーに出す。
 func run(ctx context.Context, d Deps, args []string) int {
+	d.warnings = &warningLog{}
 	root := NewRootCmd(d)
 	root.SetArgs(args)
 	root.SetIn(d.Stdin)
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	c, err := root.ExecuteContextC(ctx)
+	asJSON := isJSONFormat(c)
 	if err == nil {
+		if asJSON && len(d.warnings.messages) > 0 {
+			_ = output.WriteWarnings(d.Stderr, d.warnings.messages)
+		}
 		return 0
 	}
-	asJSON := false
-	if c != nil {
-		if f := c.Flags().Lookup("format"); f != nil && f.Value.String() == "json" {
-			asJSON = true
-		}
-	}
-	output.WriteError(d.Stderr, err, asJSON)
+	output.WriteError(d.Stderr, err, asJSON, d.warnings.messages)
 	return 1
+}
+
+// isJSONFormat は c の --format が json かを返す。
+func isJSONFormat(c *cobra.Command) bool {
+	if c == nil {
+		return false
+	}
+	f := c.Flags().Lookup("format")
+	return f != nil && f.Value.String() == "json"
 }
 
 func NewRootCmd(d Deps) *cobra.Command {
@@ -93,6 +105,12 @@ func NewRootCmd(d Deps) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       d.Version,
+		// 警告を溜めるかを決めるため、フラグを解釈した後、RunE より前に --format を確認する。
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			if d.warnings != nil {
+				d.warnings.json = isJSONFormat(cmd)
+			}
+		},
 	}
 	root.SetVersionTemplate("confluence-cli {{.Version}}\n")
 	root.AddCommand(newSearchCmd(d), newPageCmd(d), newLabelCmd(d), newConfigCmd(d))

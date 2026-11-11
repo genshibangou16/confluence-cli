@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/genshibangou16/confluence-cli/internal/adapter/config"
+	"github.com/genshibangou16/confluence-cli/internal/cli/output"
 )
 
 // config のサブコマンドは認証情報なしで動かすため、buildApp を呼ばない。
@@ -40,9 +41,9 @@ func newPrompter(d Deps) *prompter {
 // line は 1 行読む。入力が空なら def を返す。
 func (p *prompter) line(label, def string) (string, error) {
 	if def != "" {
-		fmt.Fprintf(p.d.Stderr, "%s [%s]: ", label, def)
+		fmt.Fprintf(p.d.Stderr, "%s [%s]: ", output.SanitizeText(label), output.SanitizeText(def))
 	} else {
-		fmt.Fprintf(p.d.Stderr, "%s: ", label)
+		fmt.Fprintf(p.d.Stderr, "%s: ", output.SanitizeText(label))
 	}
 	s, err := p.r.ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
@@ -117,7 +118,7 @@ api_token_command を設定済みなら、API トークンは尋ねない。`,
 				return err
 			}
 			if len(fc.APITokenCommand) > 0 {
-				fmt.Fprintf(d.Stderr, "API トークンは api_token_command (%s) から取得するため入力しません\n", fc.APITokenCommand[0])
+				fmt.Fprintf(d.Stderr, "API トークンは api_token_command (%s) から取得するため入力しません\n", output.SanitizeText(fc.APITokenCommand[0]))
 			} else {
 				label := "API Token"
 				if fc.APIToken != "" {
@@ -134,7 +135,7 @@ api_token_command を設定済みなら、API トークンは尋ねない。`,
 			if err := config.SaveUser(path, fc); err != nil {
 				return err
 			}
-			fmt.Fprintf(d.Stdout, "設定を保存しました: %s\n", path)
+			fmt.Fprintf(d.Stdout, "設定を保存しました: %s\n", output.SanitizeText(path))
 			return nil
 		},
 	}
@@ -198,7 +199,7 @@ func newConfigInitLocalCmd(d Deps) *cobra.Command {
 			if err := writeLocalConfig(path, data); err != nil {
 				return err
 			}
-			fmt.Fprintf(d.Stdout, "ローカル設定を保存しました: %s\n", path)
+			fmt.Fprintf(d.Stdout, "ローカル設定を保存しました: %s\n", output.SanitizeText(path))
 			return nil
 		},
 	}
@@ -247,14 +248,14 @@ func newConfigShowCmd(d Deps) *cobra.Command {
 			user, exists, userErr := config.ReadUser(userPath)
 			switch {
 			case userErr != nil:
-				fmt.Fprintf(w, "ユーザー設定:    %s（%v）\n", userPath, userErr)
+				fmt.Fprintf(w, "ユーザー設定:    %s（%s）\n", output.SanitizeText(userPath), output.SanitizeText(userErr.Error()))
 			case exists:
-				fmt.Fprintf(w, "ユーザー設定:    %s\n", userPath)
+				fmt.Fprintf(w, "ユーザー設定:    %s\n", output.SanitizeText(userPath))
 			default:
-				fmt.Fprintf(w, "ユーザー設定:    %s（無し）\n", userPath)
+				fmt.Fprintf(w, "ユーザー設定:    %s（無し）\n", output.SanitizeText(userPath))
 			}
 			if local, _, _ := config.FindLocal(d.Sources.Cwd, d.Sources.Home); local != "" {
-				fmt.Fprintf(w, "ローカル設定:    %s\n", local)
+				fmt.Fprintf(w, "ローカル設定:    %s\n", output.SanitizeText(local))
 			} else {
 				fmt.Fprintln(w, "ローカル設定:    （無し）")
 			}
@@ -263,10 +264,10 @@ func newConfigShowCmd(d Deps) *cobra.Command {
 			// 設定が不完全でも場所の確認には使えるため、読み込みのエラーは表示して正常終了する。
 			s, warns, err := config.Load(d.Sources)
 			for _, wn := range warns {
-				fmt.Fprintln(d.Stderr, "warning: "+wn)
+				d.warn(wn)
 			}
 			if err != nil {
-				fmt.Fprintf(w, "設定を読み込めません: %v\n", err)
+				fmt.Fprintf(w, "設定を読み込めません: %s\n", output.SanitizeText(err.Error()))
 				return nil
 			}
 
@@ -285,11 +286,11 @@ func newConfigShowCmd(d Deps) *cobra.Command {
 			default:
 				spaces = strings.Join(s.WritableSpaces, ", ")
 			}
-			fmt.Fprintf(w, "Base URL:        %s\n", s.BaseURL)
-			fmt.Fprintf(w, "Email:           %s\n", s.Email)
-			fmt.Fprintf(w, "API Token:       %s\n", token)
+			fmt.Fprintf(w, "Base URL:        %s\n", output.SanitizeText(s.BaseURL))
+			fmt.Fprintf(w, "Email:           %s\n", output.SanitizeText(s.Email))
+			fmt.Fprintf(w, "API Token:       %s\n", output.SanitizeText(token))
 			fmt.Fprintf(w, "Read only:       %t\n", s.ReadOnly)
-			fmt.Fprintf(w, "Writable spaces: %s\n", spaces)
+			fmt.Fprintf(w, "Writable spaces: %s\n", output.SanitizeText(spaces))
 			return nil
 		},
 	}
@@ -301,10 +302,10 @@ func newConfigPathCmd(d Deps) *cobra.Command {
 		Short: "設定ファイルのパスを表示する",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			fmt.Fprintf(d.Stdout, "ユーザー設定:    %s\n", d.Sources.UserConfigPath)
+			fmt.Fprintf(d.Stdout, "ユーザー設定:    %s\n", output.SanitizeText(d.Sources.UserConfigPath))
 			fmt.Fprintf(d.Stdout, "ローカル設定名:  %s\n", config.LocalConfigName)
 			if local, _, _ := config.FindLocal(d.Sources.Cwd, d.Sources.Home); local != "" {
-				fmt.Fprintf(d.Stdout, "見つかったローカル設定: %s\n", local)
+				fmt.Fprintf(d.Stdout, "見つかったローカル設定: %s\n", output.SanitizeText(local))
 			}
 			return nil
 		},

@@ -97,7 +97,7 @@ func writeResult(d Deps, format string, res usecase.WriteResult, err error) erro
 			return output.JSON(d.Stdout, dryRunJSON{DryRun: true, Diff: res.Diff, Warnings: w})
 		}
 		for _, w := range res.Warnings {
-			fmt.Fprintln(d.Stderr, "warning: "+output.SanitizeText(w))
+			d.warn(w)
 		}
 		_, werr := io.WriteString(d.Stdout, output.SanitizeMultiline(res.Diff))
 		return werr

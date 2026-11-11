@@ -96,7 +96,7 @@ func newSearchCmd(d Deps) *cobra.Command {
 				return err
 			}
 			for _, w := range warns {
-				fmt.Fprintln(d.Stderr, "warning: "+w)
+				d.warn(w)
 			}
 
 			if lf.format == "json" {

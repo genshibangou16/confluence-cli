@@ -54,7 +54,7 @@ func TestJSON_SingleLine(t *testing.T) {
 
 func TestWriteError_JSON(t *testing.T) {
 	var buf bytes.Buffer
-	WriteError(&buf, &domain.Error{Kind: domain.ErrNotFound, Status: 404, Message: "m"}, true)
+	WriteError(&buf, &domain.Error{Kind: domain.ErrNotFound, Status: 404, Message: "m"}, true, nil)
 	want := `{"error":{"kind":"not_found","status":404,"message":"m"}}` + "\n"
 	if buf.String() != want {
 		t.Errorf("got %q", buf.String())
@@ -66,7 +66,7 @@ func TestWriteError_JSON(t *testing.T) {
 
 func TestWriteError_JSON_NonDomain(t *testing.T) {
 	var buf bytes.Buffer
-	WriteError(&buf, errors.New("boom"), true)
+	WriteError(&buf, errors.New("boom"), true, nil)
 	want := `{"error":{"kind":"api","message":"boom"}}` + "\n"
 	if buf.String() != want {
 		t.Errorf("got %q", buf.String())
@@ -75,17 +75,17 @@ func TestWriteError_JSON_NonDomain(t *testing.T) {
 
 func TestWriteError_Text(t *testing.T) {
 	var buf bytes.Buffer
-	WriteError(&buf, &domain.Error{Kind: domain.ErrAuth, Message: "m", Hint: "h"}, false)
+	WriteError(&buf, &domain.Error{Kind: domain.ErrAuth, Message: "m", Hint: "h"}, false, nil)
 	if buf.String() != "Error: m\nHint: h\n" {
 		t.Errorf("got %q", buf.String())
 	}
 	buf.Reset()
-	WriteError(&buf, fmt.Errorf("wrap: %w", &domain.Error{Kind: domain.ErrAuth, Message: "m"}), false)
+	WriteError(&buf, fmt.Errorf("wrap: %w", &domain.Error{Kind: domain.ErrAuth, Message: "m"}), false, nil)
 	if buf.String() != "Error: wrap: m\n" {
 		t.Errorf("got %q", buf.String())
 	}
 	buf.Reset()
-	WriteError(&buf, errors.New("boom"), false)
+	WriteError(&buf, errors.New("boom"), false, nil)
 	if buf.String() != "Error: boom\n" {
 		t.Errorf("got %q", buf.String())
 	}
@@ -120,7 +120,7 @@ func TestTruncate_Negative(t *testing.T) {
 
 func TestWriteError_TextSanitizesControlChars(t *testing.T) {
 	var buf bytes.Buffer
-	WriteError(&buf, &domain.Error{Kind: domain.ErrAPI, Message: "bad\x1b]0;title\x07msg", Hint: "h\x1b[2Jint"}, false)
+	WriteError(&buf, &domain.Error{Kind: domain.ErrAPI, Message: "bad\x1b]0;title\x07msg", Hint: "h\x1b[2Jint"}, false, nil)
 	got := buf.String()
 	if strings.ContainsRune(got, 0x1b) || strings.ContainsRune(got, 0x07) {
 		t.Fatalf("got %q", got)
@@ -170,7 +170,7 @@ func TestJSON_EscapesTerminalControls(t *testing.T) {
 
 func TestWriteError_JSONEscapesTerminalControls(t *testing.T) {
 	var buf bytes.Buffer
-	WriteError(&buf, &domain.Error{Kind: domain.ErrAPI, Message: terminalControls, Hint: terminalControls}, true)
+	WriteError(&buf, &domain.Error{Kind: domain.ErrAPI, Message: terminalControls, Hint: terminalControls}, true, nil)
 	if hasTerminalControls(buf.String()) {
 		t.Fatalf("got %q", buf.String())
 	}

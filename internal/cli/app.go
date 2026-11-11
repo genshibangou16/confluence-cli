@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/genshibangou16/confluence-cli/internal/adapter/cache"
 	"github.com/genshibangou16/confluence-cli/internal/adapter/config"
@@ -23,18 +22,18 @@ type App struct {
 
 // buildApp は設定を読み込み、Confluence のクライアントを 1 つ作ってユースケースに渡す。
 // 認証情報が無いと失敗するため、API を呼ぶコマンドの RunE の中でだけ呼ぶ。
-// 設定の警告と cloudId の警告は標準エラーに出す。
+// 設定の警告と cloudId の警告は Deps.warn で出す。
 func buildApp(ctx context.Context, d Deps) (*App, error) {
 	s, warns, err := config.Load(d.Sources)
 	for _, w := range warns {
-		fmt.Fprintln(d.Stderr, "warning: "+w)
+		d.warn(w)
 	}
 	if err != nil {
 		return nil, err
 	}
 	root, warn := confluence.ResolveRoot(ctx, d.HTTP, s.BaseURL, cache.File{Dir: d.CacheDir})
 	if warn != "" {
-		fmt.Fprintln(d.Stderr, "warning: "+warn)
+		d.warn(warn)
 	}
 	c := confluence.New(confluence.Options{Root: root, Email: s.Email, Token: s.APIToken, HTTP: d.HTTP})
 	guard := usecase.NewWriteGuard(usecase.WritePolicy{ReadOnly: s.ReadOnly, WritableSpaces: s.WritableSpaces}, c)

@@ -8,7 +8,7 @@ import (
 	"github.com/genshibangou16/confluence-cli/internal/domain"
 )
 
-// ErrorJSON は --json 指定時のエラー出力の形。
+// ErrorJSON は --format json 指定時のエラー出力の形。Warnings は、失敗するまでに出た警告。
 type ErrorJSON struct {
 	Error struct {
 		Kind    string `json:"kind"`
@@ -16,11 +16,23 @@ type ErrorJSON struct {
 		Message string `json:"message"`
 		Hint    string `json:"hint,omitempty"`
 	} `json:"error"`
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+// WarningsJSON は --format json のコマンドが成功したときに、警告を標準エラーに出す形。
+type WarningsJSON struct {
+	Warnings []string `json:"warnings"`
+}
+
+// WriteWarnings は warnings を 1 行の WarningsJSON で w に書き出す。
+func WriteWarnings(w io.Writer, warnings []string) error {
+	return JSON(w, WarningsJSON{Warnings: warnings})
 }
 
 // WriteError は err を w に書き出す。メッセージは err.Error() を使い、
 // ラップした側の文脈を残す。*domain.Error を含む場合は Status と Hint をその値から取る。
-func WriteError(w io.Writer, err error, asJSON bool) {
+// warnings は JSON のときだけ ErrorJSON.Warnings に入れる。テキストのときは呼び出し側が警告を出し済みのため使わない。
+func WriteError(w io.Writer, err error, asJSON bool, warnings []string) {
 	var de *domain.Error
 	hasDomain := errors.As(err, &de)
 
@@ -38,6 +50,7 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 		}
 		e.Error.Message = msg
 		e.Error.Hint = hint
+		e.Warnings = warnings
 		_ = JSON(w, e)
 		return
 	}
