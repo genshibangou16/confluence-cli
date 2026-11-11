@@ -107,3 +107,12 @@ func TestLostText_InlineBoundaries(t *testing.T) {
 		t.Errorf("lost = %v", lost)
 	}
 }
+
+func TestInspect_ClosingWrapperNoPanic(t *testing.T) {
+	body := `<p>a</p></root><ac:structured-macro ac:name="status"></ac:structured-macro><root>`
+	if got := LossyElements(body); len(got) != 0 {
+		t.Errorf("LossyElements = %v", got)
+	}
+	_ = CommentMarkerRefs(body)
+	_ = LostText(body, body)
+}

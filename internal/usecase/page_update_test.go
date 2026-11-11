@@ -488,3 +488,16 @@ func TestUpdate_DryRunAllowedWithoutWritePermission(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdate_MalformedAssembledBodyRefused(t *testing.T) {
+	// 追記と先頭への追加は現在の本文を解析しないため、組み立てた本文を送る前に確認する。
+	for _, cur := range []string{"<p>a", `<p>a</p></root><h2>X</h2><root>`} {
+		for name, mode := range map[string]UpdateMode{"append": ModeAppend, "prepend": ModePrepend} {
+			c, s := newUpdateCommand(WritePolicy{}, cur)
+			_, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("<p>新</p>"), Input: InputStorage, Mode: mode})
+			if domain.KindOf(err) != domain.ErrValidation || s.updates != 0 {
+				t.Errorf("%s %q: err = %v updates = %d", name, cur, err, s.updates)
+			}
+		}
+	}
+}

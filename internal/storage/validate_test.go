@@ -136,3 +136,23 @@ func TestDecoder_RichFixtureCDATA(t *testing.T) {
 		}
 	}
 }
+
+func TestValidate_RejectsClosingWrapper(t *testing.T) {
+	// 包んだルート要素を本文の途中で閉じると、その後ろの要素はルート要素の外に出る。
+	for _, body := range []string{
+		`<p>a</p></root><h2>X</h2><root>`,
+		`<p>a</p></root>`,
+		`</root><root>`,
+	} {
+		var se *SyntaxError
+		if err := Validate(body); !errors.As(err, &se) {
+			t.Errorf("Validate(%q) = %v, want *SyntaxError", body, err)
+		}
+	}
+}
+
+func TestValidate_AcceptsNestedRootElement(t *testing.T) {
+	if err := Validate(`<root><p>a</p></root>`); err != nil {
+		t.Fatalf("Validate = %v", err)
+	}
+}

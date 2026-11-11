@@ -363,3 +363,11 @@ func TestSections_PrivateFixtures(t *testing.T) {
 		}
 	}
 }
+
+func TestHeadingsAndFindSection_ClosingWrapperIsError(t *testing.T) {
+	body := `<p>a</p></root><h2>X</h2><root>`
+	_, err := Headings(body)
+	wantValidation(t, err)
+	_, err = FindSection(body, "X")
+	wantValidation(t, err)
+}

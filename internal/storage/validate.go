@@ -35,7 +35,7 @@ func Validate(body string) error {
 }
 
 // syntaxError は Decoder.Token が返した err を、元の本文での位置を持つ *SyntaxError にする。
-func syntaxError(body string, d *xml.Decoder, prefix int, err error) *SyntaxError {
+func syntaxError(body string, d *TokenReader, prefix int, err error) *SyntaxError {
 	msg := err.Error()
 	var xe *xml.SyntaxError
 	if errors.As(err, &xe) {

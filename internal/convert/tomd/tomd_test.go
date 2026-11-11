@@ -183,3 +183,9 @@ func contentBytes(t *testing.T, body string) int {
 		}
 	}
 }
+
+func TestConvert_ClosingWrapperIsError(t *testing.T) {
+	if got, err := Convert(`<p>a</p></root><h2>X</h2><root>`); err == nil {
+		t.Errorf("got %q, want error", got)
+	}
+}

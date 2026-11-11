@@ -211,6 +211,16 @@ func (c *PageCommand) Update(ctx context.Context, r UpdateRequest) (WriteResult,
 	if err != nil {
 		return WriteResult{}, err
 	}
+	// 追記と先頭への追加は現在の本文を解析しないため、現在の本文が整形式でなければ、組み立てた本文も整形式にならない。
+	if r.Body != nil {
+		if err := storage.Validate(body); err != nil {
+			return WriteResult{}, &domain.Error{
+				Kind:    domain.ErrValidation,
+				Message: fmt.Sprintf("ページ %s の更新後の本文が整形式ではないため、更新しません: %v", r.ID, err),
+				Err:     err,
+			}
+		}
+	}
 
 	var warnings []string
 	// DryRun では、書き込まずに失われるものを確認できるように、エラーにせず警告として返す。
