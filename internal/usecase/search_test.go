@@ -113,3 +113,38 @@ func TestSearch_SpaceIDNotFilledForOtherModesOrNoHits(t *testing.T) {
 		t.Fatalf("calls = %v", l.byIDsCalls)
 	}
 }
+
+func TestSearch_TitleNoHitsWarns(t *testing.T) {
+	fs := &fakeSearcher{}
+	hits, warnings, err := NewSearchService(fs, &fakePageLister{}).Search(context.Background(), cql.Filter{Mode: cql.ModeTitle, Query: "foo"}, 25, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 0 || len(warnings) != 1 || !strings.Contains(warnings[0], "--title") {
+		t.Fatalf("hits = %+v, warnings = %q", hits, warnings)
+	}
+}
+
+func TestSearch_NoHitsWarningOnlyForTitle(t *testing.T) {
+	cases := map[string]struct {
+		f    cql.Filter
+		hits []domain.SearchHit
+	}{
+		"タイトル検索で 1 件以上":    {cql.Filter{Mode: cql.ModeTitle, Query: "foo"}, []domain.SearchHit{{ID: "1"}}},
+		"--cql で 0 件":      {cql.Filter{Mode: cql.ModeTitle, RawCQL: "type = page"}, nil},
+		"siteSearch で 0 件": {cql.Filter{Mode: cql.ModeSite, Query: "foo"}, nil},
+		"text で 0 件":       {cql.Filter{Mode: cql.ModeText, Query: "foo"}, nil},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			fs := &fakeSearcher{hits: c.hits}
+			_, warnings, err := NewSearchService(fs, &fakePageLister{}).Search(context.Background(), c.f, 25, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(warnings) != 0 {
+				t.Fatalf("warnings = %q", warnings)
+			}
+		})
+	}
+}
