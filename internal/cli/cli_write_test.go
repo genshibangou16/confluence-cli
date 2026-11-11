@@ -204,6 +204,7 @@ func TestPageUpdate_FlagsExclusive(t *testing.T) {
 		{"--append"},
 		{"--body", "<p>x</p>", "--input-format", "html"},
 		{"--body", "<p>x</p>", "--expect-version", "-1"},
+		{"--body", "<p>x</p>", "--expect-version", "0"},
 	}
 	for _, c := range cases {
 		e, _ := newWriteEnv(t)
@@ -369,7 +370,7 @@ func TestLabel_AddRemove(t *testing.T) {
 	if !reflect.DeepEqual(f.writes, []string{"POST /wiki/rest/api/content/1/label"}) || !reflect.DeepEqual(f.sent["list"], want) {
 		t.Fatalf("writes = %v, sent = %v", f.writes, f.sent)
 	}
-	if e.stdout.String() != "labels: a, b\n" {
+	if e.stdout.String() != "labels:\n- a\n- b\n" {
 		t.Fatalf("stdout = %q", e.stdout)
 	}
 
@@ -379,5 +380,32 @@ func TestLabel_AddRemove(t *testing.T) {
 	}
 	if !reflect.DeepEqual(f.writes, []string{"DELETE /wiki/rest/api/content/1/label?name=a%2Fb"}) || e.stdout.String() != "removed: a/b\n" {
 		t.Fatalf("writes = %v, stdout = %q", f.writes, e.stdout)
+	}
+}
+
+func TestPageUpdate_BodyFileTooLarge(t *testing.T) {
+	prev := maxBodyBytes
+	maxBodyBytes = 8
+	t.Cleanup(func() { maxBodyBytes = prev })
+
+	p := filepath.Join(t.TempDir(), "body.html")
+	if err := os.WriteFile(p, []byte("<p>123456</p>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, src := range []string{"-", p} {
+		e, _ := newWriteEnv(t)
+		e.deps.Stdin = strings.NewReader("<p>123456</p>")
+		if code := e.run("page", "update", "1", "--body-file", src, "--format", "json"); code != 1 {
+			t.Fatalf("%s: code = %d", src, code)
+		}
+		if !strings.Contains(e.stderr.String(), `"kind":"validation"`) || len(e.rec.reqs) != 0 {
+			t.Fatalf("%s: stderr = %s, reqs = %v", src, e.stderr, e.rec.reqs)
+		}
+	}
+
+	e, f := newWriteEnv(t)
+	e.deps.Stdin = strings.NewReader("<p>1</p>")
+	if code := e.run("page", "update", "1", "--body-file", "-"); code != 0 || f.body != "<p>1</p>" {
+		t.Fatalf("at the limit: code = %d, body = %q, stderr = %s", code, f.body, e.stderr)
 	}
 }

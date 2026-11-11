@@ -40,6 +40,10 @@ func (f bodyFlags) check(cmd *cobra.Command) error {
 	return nil
 }
 
+// maxBodyBytes は --body-file から読む本文の上限。誤って巨大なファイルやストリームを渡したときに、全体をメモリに読み込まないようにする。
+// テストで小さな値に差し替えるため変数にしている。
+var maxBodyBytes int64 = 32 << 20
+
 // read は指定された本文を返す。--body も --body-file も無ければ nil を返す。
 func (f bodyFlags) read(cmd *cobra.Command, stdin io.Reader) (*string, error) {
 	switch {
@@ -48,15 +52,21 @@ func (f bodyFlags) read(cmd *cobra.Command, stdin io.Reader) (*string, error) {
 	case !cmd.Flags().Changed("body-file"):
 		return nil, nil
 	}
-	var b []byte
-	var err error
-	if f.bodyFile == "-" {
-		b, err = io.ReadAll(stdin)
-	} else {
-		b, err = os.ReadFile(f.bodyFile)
+	r := stdin
+	if f.bodyFile != "-" {
+		file, err := os.Open(f.bodyFile)
+		if err != nil {
+			return nil, validationf("--body-file を読めない: %v", err)
+		}
+		defer file.Close()
+		r = file
 	}
+	b, err := io.ReadAll(io.LimitReader(r, maxBodyBytes+1))
 	if err != nil {
 		return nil, validationf("--body-file を読めない: %v", err)
+	}
+	if int64(len(b)) > maxBodyBytes {
+		return nil, validationf("--body-file の本文が %d バイトを超えている", maxBodyBytes)
 	}
 	s := string(b)
 	return &s, nil
@@ -216,8 +226,9 @@ func newPageUpdateCmd(d Deps) *cobra.Command {
 			if modes > 1 {
 				return validationf("--append・--prepend・--section は同時に指定できない")
 			}
-			if expectVersion < 0 {
-				return validationf("--expect-version には正の数を指定する")
+			// usecase は ExpectedVersion が 0 なら版を確認しないため、明示した 0 を受け付けると確認がされない。
+			if cmd.Flags().Changed("expect-version") && expectVersion < 1 {
+				return validationf("--expect-version には 1 以上の版番号を指定する")
 			}
 			if cmd.Flags().Changed("title") {
 				req.Title = &title

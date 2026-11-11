@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -45,7 +44,10 @@ func newLabelAddCmd(d Deps) *cobra.Command {
 			if format == "json" {
 				return output.JSON(d.Stdout, labelsAddedJSON{ID: string(id), Labels: names})
 			}
-			fmt.Fprintf(d.Stdout, "labels: %s\n", output.SanitizeText(strings.Join(names, ", ")))
+			fmt.Fprintln(d.Stdout, "labels:")
+			for _, n := range names {
+				fmt.Fprintf(d.Stdout, "- %s\n", output.SanitizeText(n))
+			}
 			return nil
 		},
 	}
