@@ -1,4 +1,4 @@
-BINARY_NAME=confluence
+BINARY_NAME=confluence-cli
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS=-ldflags "-X main.version=$(VERSION)"
 
@@ -7,8 +7,8 @@ LDFLAGS=-ldflags "-X main.version=$(VERSION)"
 build:
 	go build $(LDFLAGS) -o $(BINARY_NAME) .
 
-install: build
-	cp $(BINARY_NAME) /usr/local/bin/
+install:
+	go install .
 
 install-local: build
 	mkdir -p ~/bin

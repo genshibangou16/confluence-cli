@@ -32,7 +32,7 @@ go.work.sum
 # .vscode/
 
 # Built binary
-confluence
+/confluence
 confluence-*
 
 # Recording output
@@ -40,3 +40,10 @@ confluence-*
 
 # Local config (contains credentials)
 .confluence-cli.yaml
+
+# Private test data
+testdata/private/
+/confluence-cli
+
+# Agent working files
+.superpowers/

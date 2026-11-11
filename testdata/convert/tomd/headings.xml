@@ -1,0 +1,4 @@
+<h1>概要</h1><p>最初の段落。&nbsp;改行しない空白と   連続した空白を含む。</p><h2>背景 と <em>目的</em></h2><p><strong>太字</strong>、<em>斜体</em>、<u>下線</u>、<s>取り消し線</s>、<del>削除</del>、<span style="text-decoration: line-through;">スタイルの取り消し線</span>、<code>inline &lt;code&gt;</code>、<code>a`b</code>、<strong> 前後に空白 </strong>の強調。</p><p>1 行目<br />2 行目<br/></p><p /><p>&nbsp;</p><h3>リンク</h3><p><a href="https://example.com/path?a=1&amp;b=2">外部リンク</a>、<a href="https://example.com/">https://example.com/</a>、<span style="color: rgb(255,86,48);">色付き</span>。</p><blockquote><p>引用の段落。</p><p>2 つ目の段落。</p></blockquote><hr /><h6>小見出し</h6><pre>preformatted
+  text</pre>
+<p>- ハイフンで始まる文</p><p>1. 番号で始まる文</p><p>#タグ</p><p># 見出しに見える文</p>
+<p>```</p><p>~~~go</p><p>---</p><p>***</p><p>___</p><p>===</p><p>- - -</p><p>後続の段落。</p>

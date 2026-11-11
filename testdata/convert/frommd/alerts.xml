@@ -1,0 +1,15 @@
+<ac:structured-macro ac:name="info" ac:schema-version="1"><ac:rich-text-body>
+<p>これは補足情報です。</p>
+</ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="tip" ac:schema-version="1"><ac:rich-text-body>
+<p>便利なヒントです。</p>
+</ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="note" ac:schema-version="1"><ac:rich-text-body>
+<p>注意が必要です。</p>
+</ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="warning" ac:schema-version="1"><ac:rich-text-body>
+<p>重大な影響があります。</p>
+</ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="info" ac:schema-version="1"><ac:rich-text-body>
+<p>重要な情報です。</p>
+</ac:rich-text-body></ac:structured-macro>

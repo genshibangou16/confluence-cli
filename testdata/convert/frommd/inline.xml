@@ -1,0 +1,4 @@
+<p><strong>太字</strong> と <em>斜体</em> と <span style="text-decoration: line-through;">取り消し線</span> と <code>インラインコード</code>。</p>
+<p><a href="https://example.com">表示テキスト</a></p>
+<p><ac:image ac:alt="代替テキスト"><ri:url ri:value="https://example.com/image.png" /></ac:image></p>
+<p>1 行目<br />2 行目 3 行目</p>

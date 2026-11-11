@@ -1,9 +1,14 @@
 package main
 
 import (
-	"github.com/ryo-imai-bit/confluence-cli/cmd"
+	"os"
+
+	"github.com/genshibangou16/confluence-cli/internal/cli"
 )
 
+// version はビルド時に -ldflags "-X main.version=..." で埋め込む。
+var version = "dev"
+
 func main() {
-	cmd.Execute()
+	os.Exit(cli.Execute(version))
 }

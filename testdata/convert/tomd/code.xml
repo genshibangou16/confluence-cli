@@ -1,0 +1,13 @@
+<p>前の段落。</p><ac:structured-macro ac:name="code" ac:schema-version="1" ac:macro-id="00000000-0000-4000-8000-000000000001"><ac:parameter ac:name="language">go</ac:parameter><ac:parameter ac:name="title">main.go</ac:parameter><ac:parameter ac:name="linenumbers">true</ac:parameter><ac:plain-text-body><![CDATA[package main
+
+func main() {
+	if a < b && b > 0 {
+		println("<ok> & done")
+	}
+	_ = m["k"][0] // ]]]]><![CDATA[> を含む行
+}
+]]></ac:plain-text-body></ac:structured-macro><ac:structured-macro ac:name="code"><ac:plain-text-body><![CDATA[言語の指定がない
+```
+バッククォート 3 つを含む]]></ac:plain-text-body></ac:structured-macro><ul><li><p>リストの中のコード</p><ac:structured-macro ac:name="code"><ac:parameter ac:name="language">bash</ac:parameter><ac:plain-text-body><![CDATA[echo a
+
+echo b]]></ac:plain-text-body></ac:structured-macro></li></ul>
