@@ -135,8 +135,8 @@ api_token_command を設定済みなら、API トークンは尋ねない。`,
 			if err := config.SaveUser(path, fc); err != nil {
 				return err
 			}
-			fmt.Fprintf(d.Stdout, "設定を保存しました: %s\n", output.SanitizeText(path))
-			return nil
+			_, err = fmt.Fprintf(d.Stdout, "設定を保存しました: %s\n", output.SanitizeText(path))
+			return err
 		},
 	}
 }
@@ -199,8 +199,8 @@ func newConfigInitLocalCmd(d Deps) *cobra.Command {
 			if err := writeLocalConfig(path, data); err != nil {
 				return err
 			}
-			fmt.Fprintf(d.Stdout, "ローカル設定を保存しました: %s\n", output.SanitizeText(path))
-			return nil
+			_, err = fmt.Fprintf(d.Stdout, "ローカル設定を保存しました: %s\n", output.SanitizeText(path))
+			return err
 		},
 	}
 }
@@ -243,23 +243,23 @@ func newConfigShowCmd(d Deps) *cobra.Command {
 		Short: "設定ファイルの場所と、読み込んだ設定を表示する（API トークンは先頭 4 文字だけ）",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			w := d.Stdout
+			w := &printer{w: d.Stdout}
 			userPath := d.Sources.UserConfigPath
 			user, exists, userErr := config.ReadUser(userPath)
 			switch {
 			case userErr != nil:
-				fmt.Fprintf(w, "ユーザー設定:    %s（%s）\n", output.SanitizeText(userPath), output.SanitizeText(userErr.Error()))
+				w.printf("ユーザー設定:    %s（%s）\n", output.SanitizeText(userPath), output.SanitizeText(userErr.Error()))
 			case exists:
-				fmt.Fprintf(w, "ユーザー設定:    %s\n", output.SanitizeText(userPath))
+				w.printf("ユーザー設定:    %s\n", output.SanitizeText(userPath))
 			default:
-				fmt.Fprintf(w, "ユーザー設定:    %s（無し）\n", output.SanitizeText(userPath))
+				w.printf("ユーザー設定:    %s（無し）\n", output.SanitizeText(userPath))
 			}
 			if local, _, _ := config.FindLocal(d.Sources.Cwd, d.Sources.Home); local != "" {
-				fmt.Fprintf(w, "ローカル設定:    %s\n", output.SanitizeText(local))
+				w.printf("ローカル設定:    %s\n", output.SanitizeText(local))
 			} else {
-				fmt.Fprintln(w, "ローカル設定:    （無し）")
+				w.println("ローカル設定:    （無し）")
 			}
-			fmt.Fprintln(w)
+			w.println()
 
 			// 設定が不完全でも場所の確認には使えるため、読み込みのエラーは表示して正常終了する。
 			s, warns, err := config.Load(d.Sources)
@@ -267,8 +267,8 @@ func newConfigShowCmd(d Deps) *cobra.Command {
 				d.warn(wn)
 			}
 			if err != nil {
-				fmt.Fprintf(w, "設定を読み込めません: %s\n", output.SanitizeText(err.Error()))
-				return nil
+				w.printf("設定を読み込めません: %s\n", output.SanitizeText(err.Error()))
+				return w.err
 			}
 
 			token := maskToken(s.APIToken)
@@ -286,12 +286,12 @@ func newConfigShowCmd(d Deps) *cobra.Command {
 			default:
 				spaces = strings.Join(s.WritableSpaces, ", ")
 			}
-			fmt.Fprintf(w, "Base URL:        %s\n", output.SanitizeText(s.BaseURL))
-			fmt.Fprintf(w, "Email:           %s\n", output.SanitizeText(s.Email))
-			fmt.Fprintf(w, "API Token:       %s\n", output.SanitizeText(token))
-			fmt.Fprintf(w, "Read only:       %t\n", s.ReadOnly)
-			fmt.Fprintf(w, "Writable spaces: %s\n", output.SanitizeText(spaces))
-			return nil
+			w.printf("Base URL:        %s\n", output.SanitizeText(s.BaseURL))
+			w.printf("Email:           %s\n", output.SanitizeText(s.Email))
+			w.printf("API Token:       %s\n", output.SanitizeText(token))
+			w.printf("Read only:       %t\n", s.ReadOnly)
+			w.printf("Writable spaces: %s\n", output.SanitizeText(spaces))
+			return w.err
 		},
 	}
 }
@@ -302,12 +302,13 @@ func newConfigPathCmd(d Deps) *cobra.Command {
 		Short: "設定ファイルのパスを表示する",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			fmt.Fprintf(d.Stdout, "ユーザー設定:    %s\n", output.SanitizeText(d.Sources.UserConfigPath))
-			fmt.Fprintf(d.Stdout, "ローカル設定名:  %s\n", config.LocalConfigName)
+			out := &printer{w: d.Stdout}
+			out.printf("ユーザー設定:    %s\n", output.SanitizeText(d.Sources.UserConfigPath))
+			out.printf("ローカル設定名:  %s\n", config.LocalConfigName)
 			if local, _, _ := config.FindLocal(d.Sources.Cwd, d.Sources.Home); local != "" {
-				fmt.Fprintf(d.Stdout, "見つかったローカル設定: %s\n", output.SanitizeText(local))
+				out.printf("見つかったローカル設定: %s\n", output.SanitizeText(local))
 			}
-			return nil
+			return out.err
 		},
 	}
 }

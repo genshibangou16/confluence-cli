@@ -112,9 +112,12 @@ func writeResult(d Deps, format string, res usecase.WriteResult, err error) erro
 		}
 		return err
 	}
-	fmt.Fprintf(d.Stdout, "id: %s\ntitle: %s\nversion: %d\nurl: %s\n",
+	_, werr := fmt.Fprintf(d.Stdout, "id: %s\ntitle: %s\nversion: %d\nurl: %s\n",
 		p.ID, output.SanitizeText(p.Title), p.Version.Number, output.SanitizeText(p.WebURL))
-	return err
+	if err != nil {
+		return err
+	}
+	return werr
 }
 
 func newPageCreateCmd(d Deps) *cobra.Command {
@@ -290,8 +293,8 @@ func newPageDeleteCmd(d Deps) *cobra.Command {
 			if format == "json" {
 				return output.JSON(d.Stdout, deletedJSON{Deleted: string(id)})
 			}
-			fmt.Fprintf(d.Stdout, "deleted: %s\n", id)
-			return nil
+			_, err = fmt.Fprintf(d.Stdout, "deleted: %s\n", id)
+			return err
 		},
 	}
 	c.Flags().StringVar(&format, "format", "text", "出力形式（text, json）")

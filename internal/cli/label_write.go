@@ -44,11 +44,12 @@ func newLabelAddCmd(d Deps) *cobra.Command {
 			if format == "json" {
 				return output.JSON(d.Stdout, labelsAddedJSON{ID: string(id), Labels: names})
 			}
-			fmt.Fprintln(d.Stdout, "labels:")
+			out := &printer{w: d.Stdout}
+			out.println("labels:")
 			for _, n := range names {
-				fmt.Fprintf(d.Stdout, "- %s\n", output.SanitizeText(n))
+				out.printf("- %s\n", output.SanitizeText(n))
 			}
-			return nil
+			return out.err
 		},
 	}
 	c.Flags().StringVar(&format, "format", "text", "出力形式（text, json）")
@@ -79,8 +80,8 @@ func newLabelRemoveCmd(d Deps) *cobra.Command {
 			if format == "json" {
 				return output.JSON(d.Stdout, labelRemovedJSON{ID: string(id), Removed: args[1]})
 			}
-			fmt.Fprintf(d.Stdout, "removed: %s\n", output.SanitizeText(args[1]))
-			return nil
+			_, err = fmt.Fprintf(d.Stdout, "removed: %s\n", output.SanitizeText(args[1]))
+			return err
 		},
 	}
 	c.Flags().StringVar(&format, "format", "text", "出力形式（text, json）")

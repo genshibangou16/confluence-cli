@@ -128,10 +128,11 @@ func newPageGetCmd(d Deps) *cobra.Command {
 			fmt.Fprintf(d.Stderr, "id: %s\ntitle: %s\nversion: %d\nurl: %s\n---\n",
 				p.ID, output.SanitizeText(p.Title), p.Version.Number, output.SanitizeText(p.WebURL))
 			if outline {
+				out := &printer{w: d.Stdout}
 				for _, o := range v.Outline {
-					fmt.Fprintf(d.Stdout, "%s- %s\n", strings.Repeat("  ", o.Level-1), output.SanitizeText(o.Text))
+					out.printf("%s- %s\n", strings.Repeat("  ", o.Level-1), output.SanitizeText(o.Text))
 				}
-				return nil
+				return out.err
 			}
 			_, err = io.WriteString(d.Stdout, output.SanitizeMultiline(v.Content))
 			return err
