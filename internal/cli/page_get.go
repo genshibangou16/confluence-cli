@@ -62,6 +62,7 @@ func newPageGetCmd(d Deps) *cobra.Command {
 --outline は本文の代わりに、トップレベルの見出しをレベルに応じてインデントした一覧を標準出力に出す。
 --section は指定した見出しの節の中身だけを出す。--outline とは同時に指定できない。
 --format storage は本文（storage 形式）だけを標準出力に、版番号を標準エラーに出す。
+標準出力が端末なら本文の制御文字を除いて末尾に改行を足し、端末でなければ本文をバイト単位でそのまま出す。
 --format json はページの情報と content を 1 行の JSON で出す。content の形式は --content-format（markdown, storage）で選ぶ。`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -108,9 +109,19 @@ func newPageGetCmd(d Deps) *cobra.Command {
 				return output.JSON(d.Stdout, out)
 			case usecase.FormatStorage:
 				fmt.Fprintf(d.Stderr, "version: %d\n", p.Version.Number)
-				// 出力を page update --body-file - に渡したときに本文がバイト単位で一致するよう、
-				// SanitizeText も末尾の改行の追加も行わない。
-				_, err = io.WriteString(d.Stdout, v.Content)
+				// パイプやファイルに出すときは、page update --body-file に渡して本文がバイト単位で一致するよう、
+				// 制御文字の除去も末尾の改行の追加も行わない。
+				// 端末に出すときは、本文の ESC や双方向制御文字で端末の表示を変えられないよう制御文字を除き、
+				// 次のプロンプトが本文の行に続かないよう末尾に改行を足す。
+				if !d.isTerminal(d.Stdout) {
+					_, err = io.WriteString(d.Stdout, v.Content)
+					return err
+				}
+				s := output.SanitizeMultiline(v.Content)
+				if !strings.HasSuffix(s, "\n") {
+					s += "\n"
+				}
+				_, err = io.WriteString(d.Stdout, s)
 				return err
 			}
 			// 標準出力を page update --input-format markdown に渡したときにページの情報が本文に入らないよう、ページの情報は標準エラーに出す。

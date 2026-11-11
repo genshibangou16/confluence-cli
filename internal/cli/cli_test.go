@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -496,5 +497,40 @@ func TestRoot_Version(t *testing.T) {
 	}
 	if e.stdout.String() != "confluence-cli v1.2.3\n" {
 		t.Fatalf("stdout = %q", e.stdout)
+	}
+}
+
+func TestPageGet_StorageSanitizedOnTerminal(t *testing.T) {
+	body := `{"id":"1","title":"T","status":"current","spaceId":"10","version":{"number":1},"body":{"storage":{"value":"<h1>A</h1><p>x\u009b31m\u202Ered</p>"}}}`
+	for _, args := range [][]string{
+		{"page", "get", "1", "--format", "storage"},
+		{"page", "get", "1", "--format", "storage", "--section", "A"},
+	} {
+		// 端末に出すときは制御文字を除き、末尾に改行を足す。
+		e := newEnv(t, map[string]http.HandlerFunc{"/wiki/api/v2/pages/1": reply(body)})
+		e.deps.IsTerminal = func(io.Writer) bool { return true }
+		if code := e.run(args...); code != 0 {
+			t.Fatalf("%v: code = %d, stderr = %s", args, code, e.stderr)
+		}
+		out := e.stdout.String()
+		if strings.ContainsAny(out, "\u009b\u202E") || !strings.HasSuffix(out, "x 31mred</p>\n") {
+			t.Fatalf("%v: terminal stdout = %q", args, out)
+		}
+
+		// 端末でなければバイト単位でそのまま出す。
+		e = newEnv(t, map[string]http.HandlerFunc{"/wiki/api/v2/pages/1": reply(body)})
+		e.deps.IsTerminal = func(io.Writer) bool { return false }
+		if code := e.run(args...); code != 0 {
+			t.Fatalf("%v: code = %d, stderr = %s", args, code, e.stderr)
+		}
+		if out := e.stdout.String(); !strings.HasSuffix(out, "<p>x\u009b31m\u202Ered</p>") {
+			t.Fatalf("%v: pipe stdout = %q", args, out)
+		}
+	}
+}
+
+func TestIsTerminal_NonFileWriter(t *testing.T) {
+	if isTerminal(&bytes.Buffer{}) {
+		t.Fatal("bytes.Buffer を端末と判定した")
 	}
 }

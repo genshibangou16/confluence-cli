@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/genshibangou16/confluence-cli/internal/adapter/cache"
 	"github.com/genshibangou16/confluence-cli/internal/adapter/config"
@@ -28,6 +29,21 @@ type Deps struct {
 	Stdout   io.Writer
 	Stderr   io.Writer
 	Stdin    io.Reader
+	// IsTerminal は出力先が端末かを返す。nil なら isTerminal を使う。
+	IsTerminal func(io.Writer) bool
+}
+
+func (d Deps) isTerminal(w io.Writer) bool {
+	if d.IsTerminal != nil {
+		return d.IsTerminal(w)
+	}
+	return isTerminal(w)
+}
+
+// isTerminal は w が端末を指す *os.File なら true を返す。*os.File 以外は端末として扱わない。
+func isTerminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
 }
 
 // Execute は実環境の Deps でコマンドを実行し、終了コードを返す。version は --version で表示する値。
