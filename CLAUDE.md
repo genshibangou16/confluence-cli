@@ -24,19 +24,6 @@ go vet ./... && go test ./...
 go test -v ./internal/... -run TestName  # run single test
 ```
 
-### E2E tests
-
-`e2e/` runs the built binary against a real Confluence. It needs the `e2e` build tag and a test root page:
-
-```bash
-CONFLUENCE_E2E_ROOT=<page id> go test -tags e2e -count=1 ./e2e/...
-```
-
-- Pass the page id through the environment only. Never write it into files, tests, or commit messages.
-- Write commands (`page create/update/delete`, `label add/remove`) must go through `env.write` in `e2e/helper_test.go`, which refuses any target that is not a descendant of the test root. The test root itself can be the target only as the parent of `page create` and for restoring it during cleanup.
-- Concurrent E2E runs against the same test root are not supported.
-- Without `CONFLUENCE_E2E_ROOT` the tests skip.
-
 ### Public repository
 
 Never put the company's Confluence site URL, real page ids, or internal page content in code, tests, testdata, docs, or commit messages. Use `example.atlassian.net` and fake ids. `testdata/private/` is gitignored.
@@ -51,7 +38,6 @@ Clean architecture. Dependencies point inward.
 - `internal/adapter/{confluence,config,cache}`: implementations of the ports (HTTP client, config files and token command, cloudId cache)
 - `internal/cli` (with `output`): cobra commands; wires adapters into usecases
 - `main.go`: entry point
-- `e2e/`: E2E tests (build tag `e2e`)
 
 Dependency rules:
 
