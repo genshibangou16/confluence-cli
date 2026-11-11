@@ -758,6 +758,11 @@ func table(n *node) string {
 				col++
 			}
 			rs, cs := span(cell, "rowspan"), span(cell, "colspan")
+			// 列数はページの内容が決めるため、上限を超える表は格子を作らずに省略する。
+			// rowspan は残りの行数までしか使わないため、上限を設けない。
+			if cs > maxColumns || col+cs > maxColumns {
+				return "[table: too large]"
+			}
 			if rs > 1 || cs > 1 {
 				merged = true
 			}
@@ -802,6 +807,9 @@ func table(n *node) string {
 	}
 	return strings.TrimSuffix(sb.String(), "\n")
 }
+
+// maxColumns は格子を作る表の列数の上限。HTML の colspan の上限と同じ値。
+const maxColumns = 1000
 
 func span(cell *node, attr string) int {
 	if v, err := strconv.Atoi(strings.TrimSpace(cell.attrValue(attr))); err == nil && v > 1 {
