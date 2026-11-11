@@ -24,7 +24,7 @@ type fakePageWriter struct {
 func (f *fakePageWriter) CreatePage(_ context.Context, spaceID string, parentID domain.PageID, title, body string) (domain.Page, error) {
 	f.creates++
 	f.gotSpace, f.gotParent, f.gotTitle, f.gotBody = spaceID, parentID, title, body
-	return domain.Page{ID: "900", SpaceID: spaceID, Title: title}, nil
+	return domain.Page{ID: "900", SpaceID: spaceID, Title: title, Version: domain.Version{Number: 1}}, nil
 }
 
 func (f *fakePageWriter) UpdatePage(context.Context, domain.PageID, string, string, int, string) (domain.Page, error) {
@@ -44,10 +44,12 @@ type fakeWriteGetter struct {
 	readBackErr error
 	w           *fakePageWriter
 	calls       []domain.PageID
+	versions    []int
 }
 
-func (f *fakeWriteGetter) GetPage(_ context.Context, id domain.PageID, body bool, _ int) (domain.Page, error) {
+func (f *fakeWriteGetter) GetPage(_ context.Context, id domain.PageID, body bool, version int) (domain.Page, error) {
 	f.calls = append(f.calls, id)
+	f.versions = append(f.versions, version)
 	if p, ok := f.pages[id]; ok {
 		return p, nil
 	}
@@ -233,5 +235,15 @@ func TestCreate_NoBodyAllowed(t *testing.T) {
 	c, _, w := newCommand(WritePolicy{})
 	if _, err := c.Create(context.Background(), CreateRequest{SpaceID: "100", Title: "t", Input: InputMarkdown}); err != nil || w.creates != 1 {
 		t.Fatalf("err = %v creates = %d", err, w.creates)
+	}
+}
+
+func TestCreate_VerifyReadsWrittenVersion(t *testing.T) {
+	c, g, _ := newCommand(WritePolicy{})
+	if _, err := c.Create(context.Background(), CreateRequest{SpaceID: "100", Title: "t", Body: "<p>x</p>", Input: InputStorage}); err != nil {
+		t.Fatal(err)
+	}
+	if len(g.versions) != 1 || g.versions[0] != 1 {
+		t.Fatalf("GetPage の版 = %v, want [1]", g.versions)
 	}
 }

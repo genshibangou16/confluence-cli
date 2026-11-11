@@ -121,7 +121,9 @@ const lostWordsInMessage = 20
 // 読み戻しに失敗したときは、書き込みが済んでいることをメッセージで示す。利用者が失敗と判断して作成をやり直すと、同じページが 2 つできる。
 func (c *PageCommand) verify(ctx context.Context, written domain.Page, sent string) (WriteResult, error) {
 	res := WriteResult{Page: written}
-	got, err := c.g.GetPage(ctx, written.ID, true, 0)
+	// 書き込みの直後に別の利用者が更新しても、書き込んだ版の本文と比べるため、版を指定して読み戻す。
+	// 書き込みの応答に版番号が無ければ（0 なら）、最新版を読む。
+	got, err := c.g.GetPage(ctx, written.ID, true, written.Version.Number)
 	if err != nil {
 		return res, &domain.Error{
 			Kind:    domain.ErrVerifyFailed,

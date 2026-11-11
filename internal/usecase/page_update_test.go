@@ -22,6 +22,9 @@ type fakeUpdateStore struct {
 	readBack    string
 	readBackErr error
 
+	getVersions []int
+	writtenVer  int
+
 	gotID      domain.PageID
 	gotTitle   string
 	gotBody    string
@@ -29,8 +32,9 @@ type fakeUpdateStore struct {
 	gotMessage string
 }
 
-func (f *fakeUpdateStore) GetPage(_ context.Context, id domain.PageID, body bool, _ int) (domain.Page, error) {
+func (f *fakeUpdateStore) GetPage(_ context.Context, id domain.PageID, body bool, version int) (domain.Page, error) {
 	f.gets++
+	f.getVersions = append(f.getVersions, version)
 	if id != f.page.ID {
 		return domain.Page{}, &domain.Error{Kind: domain.ErrNotFound}
 	}
@@ -57,7 +61,7 @@ func (f *fakeUpdateStore) UpdatePage(_ context.Context, id domain.PageID, title,
 		return domain.Page{}, f.updateErr
 	}
 	f.gotID, f.gotTitle, f.gotBody, f.gotVersion, f.gotMessage = id, title, body, version, message
-	return domain.Page{ID: id, SpaceID: f.page.SpaceID, Title: title}, nil
+	return domain.Page{ID: id, SpaceID: f.page.SpaceID, Title: title, Version: domain.Version{Number: f.writtenVer}}, nil
 }
 
 func (f *fakeUpdateStore) CreatePage(context.Context, string, domain.PageID, string, string) (domain.Page, error) {
@@ -519,5 +523,26 @@ func TestUpdate_EmptyConvertedBodyRefused(t *testing.T) {
 		if domain.KindOf(err) != domain.ErrValidation || s.gets != 0 || s.updates != 0 {
 			t.Errorf("%s: err = %v gets = %d updates = %d", name, err, s.gets, s.updates)
 		}
+	}
+}
+
+func TestUpdate_VerifyReadsWrittenVersion(t *testing.T) {
+	c, s := newUpdateCommand(WritePolicy{}, "<p>旧</p>")
+	s.writtenVer = 6
+	if _, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("<p>新</p>"), Input: InputStorage}); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.getVersions) != 2 || s.getVersions[0] != 0 || s.getVersions[1] != 6 {
+		t.Fatalf("GetPage の版 = %v, want [0 6]", s.getVersions)
+	}
+}
+
+func TestUpdate_VerifyReadsLatestWhenVersionUnknown(t *testing.T) {
+	c, s := newUpdateCommand(WritePolicy{}, "<p>旧</p>")
+	if _, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("<p>新</p>"), Input: InputStorage}); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.getVersions) != 2 || s.getVersions[1] != 0 {
+		t.Fatalf("GetPage の版 = %v, want [0 0]", s.getVersions)
 	}
 }
