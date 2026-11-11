@@ -316,7 +316,6 @@ func TestReadOnly_AllWriteCommandsRefused(t *testing.T) {
 		{"page", "create", "--parent", "1", "--title", "t", "--body", "<p>x</p>"},
 		{"page", "create", "--space-key", "DEV", "--title", "t", "--body", "<p>x</p>"},
 		{"page", "update", "1", "--body", "<p>x</p>"},
-		{"page", "update", "1", "--body", "<p>x</p>", "--dry-run"},
 		{"page", "delete", "1"},
 		{"label", "add", "1", "a", "b"},
 		{"label", "remove", "1", "a"},
@@ -337,6 +336,22 @@ func TestReadOnly_AllWriteCommandsRefused(t *testing.T) {
 		}
 		if err := json.Unmarshal(e.stderr.Bytes(), &got); err != nil || got.Error.Kind != "read_only" {
 			t.Fatalf("%v: stderr = %s", c, e.stderr)
+		}
+	}
+}
+
+func TestDryRun_AllowedWithoutWritePermission(t *testing.T) {
+	for name, setup := range map[string]func(e *env){
+		"read_only":       func(e *env) { e.setEnv("CONFLUENCE_READ_ONLY", "1") },
+		"writable_spaces": func(e *env) { e.addUserConfig(t, "writable_spaces: [OTHER]") },
+	} {
+		e, f := newWriteEnv(t)
+		setup(e)
+		if code := e.run("page", "update", "1", "--body", "<p>b</p>", "--dry-run"); code != 0 {
+			t.Fatalf("%s: code = %d, stderr = %s", name, code, e.stderr)
+		}
+		if len(f.writes) != 0 || !strings.Contains(e.stdout.String(), "+<p>b</p>") {
+			t.Fatalf("%s: writes = %v, stdout = %q", name, f.writes, e.stdout)
 		}
 	}
 }

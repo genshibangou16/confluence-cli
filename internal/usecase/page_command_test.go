@@ -108,7 +108,7 @@ func TestCreate_VerifyReportsLostText(t *testing.T) {
 	c, g, _ := newCommand(WritePolicy{})
 	g.readBack = map[domain.PageID]string{"900": "<p>残る</p>"}
 	res, err := c.Create(context.Background(), CreateRequest{SpaceID: "100", Title: "t", Body: "<p>残る</p><p>消える 段落</p>", Input: InputStorage})
-	if domain.KindOf(err) != domain.ErrAPI || err == nil || !strings.Contains(err.Error(), "書き込み後の本文から次のテキストが失われました: 消える 段落") {
+	if domain.KindOf(err) != domain.ErrVerifyFailed || !strings.Contains(err.Error(), "書き込み後の本文から次のテキストが失われました: 消える 段落") {
 		t.Fatalf("err = %v", err)
 	}
 	if !slices.Equal(res.Lost, []string{"消える", "段落"}) || res.Page.ID != "900" {
@@ -184,7 +184,7 @@ func TestCreate_ReadBackFailure(t *testing.T) {
 	if w.creates != 1 || res.Page.ID != "900" {
 		t.Fatalf("creates=%d result=%+v", w.creates, res)
 	}
-	if domain.KindOf(err) != domain.ErrAPI || !errors.Is(err, cause) || !strings.Contains(err.Error(), "900") {
+	if domain.KindOf(err) != domain.ErrVerifyFailed || !errors.Is(err, cause) || !strings.Contains(err.Error(), "900") {
 		t.Fatalf("err = %v", err)
 	}
 }

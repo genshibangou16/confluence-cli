@@ -232,7 +232,7 @@ func TestFindSection_EmptyTitle(t *testing.T) {
 		if !strings.Contains(de.Message, "見出しを指定") {
 			t.Errorf("message = %q", de.Message)
 		}
-		_, err = ReplaceSection(body, title, "<p/>")
+		_, _, err = ReplaceSection(body, title, "<p/>")
 		wantValidation(t, err)
 	}
 }
@@ -263,9 +263,12 @@ func TestReplaceSection_PreservesOutsideBytes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s %q: %v", name, h.Text, err)
 			}
-			got, err := ReplaceSection(body, h.Text, content)
+			got, old, err := ReplaceSection(body, h.Text, content)
 			if err != nil {
 				t.Fatalf("%s %q: %v", name, h.Text, err)
+			}
+			if old != body[s.ContentStart:s.ContentEnd] {
+				t.Errorf("%s %q: replaced content = %q", name, h.Text, old)
 			}
 			if got[:s.ContentStart] != body[:s.ContentStart] {
 				t.Errorf("%s %q: prefix changed", name, h.Text)
@@ -284,9 +287,9 @@ func TestReplaceSection_PreservesOutsideBytes(t *testing.T) {
 }
 
 func TestReplaceSection_Errors(t *testing.T) {
-	_, err := ReplaceSection("<h2>X</h2><h2>X</h2>", "X", "<p/>")
+	_, _, err := ReplaceSection("<h2>X</h2><h2>X</h2>", "X", "<p/>")
 	wantValidation(t, err)
-	_, err = ReplaceSection("", "X", "<p/>")
+	_, _, err = ReplaceSection("", "X", "<p/>")
 	wantValidation(t, err)
 }
 
@@ -345,11 +348,11 @@ func TestSections_PrivateFixtures(t *testing.T) {
 				t.Errorf("%s: FindSection(heading at %d) = %v", filepath.Base(f), h.Start, err)
 				continue
 			}
-			same, err := ReplaceSection(body, h.Text, body[s.ContentStart:s.ContentEnd])
+			same, _, err := ReplaceSection(body, h.Text, body[s.ContentStart:s.ContentEnd])
 			if err != nil || same != body {
 				t.Errorf("%s: ReplaceSection with the same content changed the body (heading at %d, err %v)", filepath.Base(f), h.Start, err)
 			}
-			replaced, err := ReplaceSection(body, h.Text, "<p>x</p>")
+			replaced, _, err := ReplaceSection(body, h.Text, "<p>x</p>")
 			if err != nil {
 				t.Errorf("%s: ReplaceSection(heading at %d) = %v", filepath.Base(f), h.Start, err)
 				continue

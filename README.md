@@ -140,10 +140,30 @@ confluence-cli page delete <page>
 - `page create` と `page update` の本文は `--body` か `--body-file`（`-` なら標準入力）で渡す。形式は `--input-format storage|markdown`（既定は `storage`）。
 - `page update` の `--append`・`--prepend`・`--section` は同時に指定できず、指定しなかった部分の本文は変えない。
 - `--expect-version <n>` は、現在の版番号が `n` でなければ更新しない。`--message` は版コメント。
-- `--dry-run` は更新せず、現在の本文と新しい本文の差分を出す。
-- 本文の置き換えでインラインコメントのマーカーが外れるときは `--allow-drop-comments`、Markdown で表せない要素が失われるときは `--allow-lossy` を付けない限り更新しない。
+- `--dry-run` は更新せず、現在の本文と新しい本文の差分を出す。書き込まないため、`read_only` と `writable_spaces` では拒否しない。
+- 本文全体か `--section` の節を置き換えるときに、置き換える範囲のインラインコメントのマーカーが新しい本文に残らなければ、`--allow-drop-comments` を付けない限り更新しない。storage 形式の入力では、同じ `ac:ref` のマーカーを新しい本文に含めればマーカーは残る。Markdown の入力ではマーカーを表せないため、範囲のマーカーはすべて外れる。
+- Markdown の入力で本文全体か `--section` の節を置き換えるときに、置き換える範囲に Markdown で表せない要素があれば、`--allow-lossy` を付けない限り更新しない。
 - `page create` と `page update` は、更新後に本文を取得し直し、送った本文から失われたテキストがあればページの情報を出してからエラーで終了する。
 - `--format json` は、失敗時の標準エラーにも JSON を出す。
+
+### エラー
+
+失敗したときの終了コードは常に 1。標準エラーには `Error: <メッセージ>` を出し、対処方法があれば `Hint: <対処方法>` を続ける。`--format json` のコマンドでは `{"error":{"kind":...,"status":...,"message":...,"hint":...}}` を出す。`kind` は次のいずれか。
+
+| kind | 意味 |
+| --- | --- |
+| `auth` | 認証の失敗（HTTP 401） |
+| `forbidden` | 権限がない（HTTP 403） |
+| `not_found` | 対象がない（HTTP 404） |
+| `conflict` | 版の競合など（HTTP 409） |
+| `validation` | 引数・設定・本文の誤り（HTTP 400 を含む） |
+| `rate_limit` | リクエスト数の制限（HTTP 429） |
+| `read_only` | `read_only` か `writable_spaces` により書き込みを拒否した |
+| `version_mismatch` | `--expect-version` と現在の版番号が異なる |
+| `lossy` | Markdown で表せない要素が失われるため更新しなかった |
+| `comment_loss` | インラインコメントのマーカーが外れるため更新しなかった |
+| `verify_failed` | 書き込みは完了したが、書き込み後の本文の確認で失敗した（テキストが失われたか、読み戻しに失敗した） |
+| `api` | 上記以外の API の失敗と通信の失敗 |
 
 ### label
 

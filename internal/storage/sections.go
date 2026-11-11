@@ -185,13 +185,14 @@ func FindSection(body, title string) (Section, error) {
 	return Section{Heading: t.heading(idx), ContentStart: e.end, ContentEnd: end}, nil
 }
 
-// ReplaceSection は title の節の中身を content に置き換えた本文を返す。見出し自体と節の外側は元のバイト列のまま残す。
-func ReplaceSection(body, title, content string) (string, error) {
+// ReplaceSection は title の節の中身を content に置き換えた本文と、置き換える前の節の中身を返す。
+// 見出し自体と節の外側は元のバイト列のまま残す。
+func ReplaceSection(body, title, content string) (replaced, old string, err error) {
 	s, err := FindSection(body, title)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return body[:s.ContentStart] + content + body[s.ContentEnd:], nil
+	return body[:s.ContentStart] + content + body[s.ContentEnd:], body[s.ContentStart:s.ContentEnd], nil
 }
 
 // Append は本文の末尾に add を足す。

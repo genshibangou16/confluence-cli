@@ -2,7 +2,7 @@ package domain
 
 import "errors"
 
-// ErrorKind は JSON 出力と終了コードの判定に使う分類。値は JSON にそのまま出力される。
+// ErrorKind はエラーの分類。値はエラーの JSON 出力の kind にそのまま出力される。
 type ErrorKind string
 
 const (
@@ -16,7 +16,9 @@ const (
 	ErrVersionMismatch ErrorKind = "version_mismatch"
 	ErrLossy           ErrorKind = "lossy"
 	ErrCommentLoss     ErrorKind = "comment_loss"
-	ErrAPI             ErrorKind = "api"
+	// ErrVerifyFailed は、書き込みは成功したが、書き込み後に読み戻した本文の確認で失敗したことを表す。
+	ErrVerifyFailed ErrorKind = "verify_failed"
+	ErrAPI          ErrorKind = "api"
 )
 
 // Error は分類付きのエラー。Status は HTTP ステータス（HTTP 由来でなければ 0）、

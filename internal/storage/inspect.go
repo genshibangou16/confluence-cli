@@ -10,20 +10,28 @@ import (
 // ConvertibleMacros は Markdown で表せるマクロの名前。これ以外のマクロは LossyElements が損失として報告する。
 var ConvertibleMacros = []string{"code", "info", "tip", "note", "warning", "toc"}
 
-// CountCommentMarkers は fragment に含まれる ac:inline-comment-marker 要素の数を返す。
-// 解析できない箇所に達したら、そこまでの数を返す。
-func CountCommentMarkers(fragment string) int {
+// CommentMarkerRefs は fragment に含まれる ac:inline-comment-marker 要素の ac:ref の値を、出現順にマーカー 1 つにつき 1 つ返す。
+// ac:ref を持たないマーカーは空文字列になる。解析できない箇所に達したら、そこまでの結果を返す。
+func CommentMarkerRefs(fragment string) []string {
 	// 呼び出し側が先に Validate で整形式を確認するため、解析エラーでは部分的な結果を返してよい。
 	d, _ := Decoder(fragment)
-	n := 0
+	var refs []string
 	for {
 		tok, err := d.Token()
 		if err != nil {
-			return n
+			return refs
 		}
-		if se, ok := tok.(xml.StartElement); ok && isAC(se.Name, "inline-comment-marker") {
-			n++
+		se, ok := tok.(xml.StartElement)
+		if !ok || !isAC(se.Name, "inline-comment-marker") {
+			continue
 		}
+		ref := ""
+		for _, a := range se.Attr {
+			if a.Name.Space == acNamespace && a.Name.Local == "ref" {
+				ref = a.Value
+			}
+		}
+		refs = append(refs, ref)
 	}
 }
 

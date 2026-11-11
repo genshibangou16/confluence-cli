@@ -326,7 +326,7 @@ func TestUpdate_VerifyReportsLostText(t *testing.T) {
 	c, s := newUpdateCommand(WritePolicy{}, "<h2>A</h2><p>a</p>")
 	s.readBack = "<h2>A</h2>"
 	res, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("<p>追加</p>"), Input: InputStorage, Mode: ModeAppend})
-	if domain.KindOf(err) != domain.ErrAPI || !strings.Contains(err.Error(), "a 追加") {
+	if domain.KindOf(err) != domain.ErrVerifyFailed || !strings.Contains(err.Error(), "a 追加") {
 		t.Fatalf("err = %v", err)
 	}
 	if len(res.Lost) != 2 {
@@ -339,7 +339,7 @@ func TestUpdate_ReadBackFailure(t *testing.T) {
 	cause := &domain.Error{Kind: domain.ErrRateLimit}
 	s.readBackErr = cause
 	res, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("<p>新</p>"), Input: InputStorage})
-	if domain.KindOf(err) != domain.ErrAPI || !errors.Is(err, cause) || !strings.Contains(err.Error(), "20") || res.Page.ID != "20" || s.updates != 1 {
+	if domain.KindOf(err) != domain.ErrVerifyFailed || !errors.Is(err, cause) || !strings.Contains(err.Error(), "20") || res.Page.ID != "20" || s.updates != 1 {
 		t.Fatalf("err = %v result = %+v", err, res)
 	}
 }
@@ -415,5 +415,76 @@ func TestUpdate_DryRunDiffSplitsBlocks(t *testing.T) {
 	}
 	if strings.Join(minus, "|") != "-<p>a1</p>|-<p>a2</p>" || strings.Join(plus, "|") != "+<p>新</p>" {
 		t.Fatalf("diff:\n%s", res.Diff)
+	}
+}
+
+func TestUpdate_MarkdownSectionLossyRefused(t *testing.T) {
+	status := `<ac:structured-macro ac:name="status"><ac:parameter ac:name="title">完了</ac:parameter></ac:structured-macro>`
+	cur := "<h2>A</h2>" + status + "<h2>B</h2><p>b</p>"
+	c, s := newUpdateCommand(WritePolicy{}, cur)
+	_, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("新\n"), Input: InputMarkdown, Mode: ModeSection, Section: "A"})
+	if domain.KindOf(err) != domain.ErrLossy || !strings.Contains(err.Error(), "macro:status") || !strings.Contains(err.Error(), "--allow-lossy") || s.updates != 0 {
+		t.Fatalf("err = %v updates = %d", err, s.updates)
+	}
+
+	c, s = newUpdateCommand(WritePolicy{}, cur)
+	res, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("新\n"), Input: InputMarkdown, Mode: ModeSection, Section: "A", DryRun: true})
+	if err != nil || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "macro:status") || s.updates != 0 {
+		t.Fatalf("dry run: err = %v result = %+v", err, res)
+	}
+
+	c, s = newUpdateCommand(WritePolicy{}, cur)
+	if _, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("新\n"), Input: InputMarkdown, Mode: ModeSection, Section: "A", AllowLossy: true}); err != nil || s.updates != 1 {
+		t.Fatalf("allow lossy: err = %v updates = %d", err, s.updates)
+	}
+
+	// 表せない要素が置き換えない節にだけあるときは拒否しない。
+	c, s = newUpdateCommand(WritePolicy{}, cur)
+	if _, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("新\n"), Input: InputMarkdown, Mode: ModeSection, Section: "B"}); err != nil || s.updates != 1 {
+		t.Fatalf("other section: err = %v updates = %d", err, s.updates)
+	}
+}
+
+func TestUpdate_StorageKeepingMarkersNotRefused(t *testing.T) {
+	cur := "<h2>A</h2><p>" + commentMarker + "</p>"
+	c, s := newUpdateCommand(WritePolicy{}, cur)
+	if _, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr(cur + "<p>追記</p>"), Input: InputStorage}); err != nil || s.updates != 1 {
+		t.Fatalf("replace: err = %v updates = %d", err, s.updates)
+	}
+	c, s = newUpdateCommand(WritePolicy{}, cur)
+	if _, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("<p>前 " + commentMarker + "</p>"), Input: InputStorage, Mode: ModeSection, Section: "A"}); err != nil || s.updates != 1 {
+		t.Fatalf("section: err = %v updates = %d", err, s.updates)
+	}
+}
+
+func TestUpdate_StorageDroppingOneMarkerRefused(t *testing.T) {
+	second := `<ac:inline-comment-marker ac:ref="r2">別の注釈</ac:inline-comment-marker>`
+	cur := "<p>" + commentMarker + "</p><p>" + second + "</p>"
+	c, s := newUpdateCommand(WritePolicy{}, cur)
+	_, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("<p>" + commentMarker + "</p><p>別の注釈</p>"), Input: InputStorage})
+	if domain.KindOf(err) != domain.ErrCommentLoss || !strings.Contains(err.Error(), "マーカーが 1 個") || s.updates != 0 {
+		t.Fatalf("err = %v updates = %d", err, s.updates)
+	}
+}
+
+func TestUpdate_MarkdownCountsAllMarkers(t *testing.T) {
+	// Markdown はマーカーを表せないため、入力にマーカーと同じ文字列があっても置き換える範囲のマーカーはすべて数える。
+	c, s := newUpdateCommand(WritePolicy{}, "<h2>A</h2><p>"+commentMarker+"</p>")
+	_, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr(commentMarker + "\n"), Input: InputMarkdown, Mode: ModeSection, Section: "A"})
+	if domain.KindOf(err) != domain.ErrCommentLoss || !strings.Contains(err.Error(), "マーカーが 1 個") || s.updates != 0 {
+		t.Fatalf("err = %v updates = %d", err, s.updates)
+	}
+}
+
+func TestUpdate_DryRunAllowedWithoutWritePermission(t *testing.T) {
+	for name, p := range map[string]WritePolicy{
+		"read_only":       {ReadOnly: true},
+		"writable_spaces": {WritableSpaces: []string{"OTHER"}},
+	} {
+		c, s := newUpdateCommand(p, "<p>旧</p>")
+		res, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("<p>新</p>"), Input: InputStorage, DryRun: true})
+		if err != nil || !res.DryRun || !strings.Contains(res.Diff, "+<p>新</p>") || s.updates != 0 {
+			t.Errorf("%s: err = %v result = %+v updates = %d", name, err, res, s.updates)
+		}
 	}
 }

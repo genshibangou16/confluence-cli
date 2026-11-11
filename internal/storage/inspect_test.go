@@ -5,17 +5,18 @@ import (
 	"testing"
 )
 
-func TestCountCommentMarkers(t *testing.T) {
-	if got := CountCommentMarkers(readFixture(t, "rich.xml")); got != 2 {
-		t.Errorf("rich.xml = %d, want 2", got)
+func TestCommentMarkerRefs(t *testing.T) {
+	if got := CommentMarkerRefs(readFixture(t, "rich.xml")); len(got) != 2 {
+		t.Errorf("rich.xml = %v, want 2 refs", got)
 	}
-	frag := `<p><ac:inline-comment-marker ac:ref="a">x</ac:inline-comment-marker></p><p>y</p><p><ac:inline-comment-marker ac:ref="b">z</ac:inline-comment-marker></p>`
-	if got := CountCommentMarkers(frag); got != 2 {
-		t.Errorf("fragment = %d, want 2", got)
+	frag := `<p><ac:inline-comment-marker ac:ref="a">x</ac:inline-comment-marker></p><p>y</p>` +
+		`<p><ac:inline-comment-marker ac:ref="b">z</ac:inline-comment-marker><ac:inline-comment-marker>w</ac:inline-comment-marker></p>`
+	if got, want := CommentMarkerRefs(frag), []string{"a", "b", ""}; !reflect.DeepEqual(got, want) {
+		t.Errorf("fragment = %q, want %q", got, want)
 	}
 	for _, body := range []string{"", "<p>x</p>", "<p>unclosed"} {
-		if got := CountCommentMarkers(body); got != 0 {
-			t.Errorf("%q = %d, want 0", body, got)
+		if got := CommentMarkerRefs(body); len(got) != 0 {
+			t.Errorf("%q = %q, want empty", body, got)
 		}
 	}
 }
