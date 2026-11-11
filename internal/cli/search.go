@@ -38,7 +38,7 @@ func newSearchCmd(d Deps) *cobra.Command {
 		Long: `検索語・CQL・絞り込み条件でコンテンツを検索する。
 
 検索語は既定で siteSearch（Confluence の画面の検索と同じ順位付け）で検索する。
---title はタイトルの部分一致、--text は本文の全文検索だけを行う。`,
+--title はタイトルの語の一致（文字列の部分一致ではない）、--text は本文の全文検索だけを行う。`,
 		Example: `  confluence-cli search "error handling"
   confluence-cli search "API" --space-key DEV --since 30d
   confluence-cli search "setup" --title
@@ -132,7 +132,7 @@ func newSearchCmd(d Deps) *cobra.Command {
 		},
 	}
 	fl := c.Flags()
-	fl.BoolVar(&title, "title", false, "タイトルの部分一致で検索する")
+	fl.BoolVar(&title, "title", false, "タイトルの語の一致で検索する")
 	fl.BoolVar(&text, "text", false, "本文の全文検索だけを行う")
 	c.MarkFlagsMutuallyExclusive("title", "text")
 	fl.StringVar(&f.RawCQL, "cql", "", "CQL で検索する（絞り込みフラグと AND で結合する）")

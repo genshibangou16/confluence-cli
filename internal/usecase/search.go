@@ -16,11 +16,16 @@ func NewSearchService(s Searcher, p PagesByIDGetter) *SearchService {
 	return &SearchService{s: s, p: p}
 }
 
+// titleNoHitsWarning は、タイトル検索の結果が 0 件のときの警告。
+// title ~ はタイトルを語に分けて照合するため、タイトルに含まれる文字列でも一致しないことがある。
+// ワイルドカードを付けても一致しないため、検索語か検索方法を変えるよう利用者に伝える。
+const titleNoHitsWarning = "--title の検索は 0 件でした。--title はタイトルを語に分けて照合するため、タイトルに含まれる文字列でも一致しないことがあります。別の語にするか、--title を外して検索し直してください"
+
 // Search は f から CQL を組み立てて検索する。
 // siteSearch はサイトの設定によって 400 で拒否されることがあるため、検索語での siteSearch が
 // ErrValidation で失敗したときだけ、同じ検索語の text ~ で 1 回だけ検索し直し、warnings に記録する。
 // RawCQL を指定した検索は Mode を使わないため、検索し直さない。
-// タイトル検索では、結果の SpaceID をページ API で埋める。
+// タイトル検索では、結果の SpaceID をページ API で埋め、結果が 0 件なら warnings に titleNoHitsWarning を入れる。
 func (s *SearchService) Search(ctx context.Context, f cql.Filter, limit int, all bool) (hits []domain.SearchHit, warnings []string, err error) {
 	q, err := cql.Build(f)
 	if err != nil {
@@ -28,6 +33,9 @@ func (s *SearchService) Search(ctx context.Context, f cql.Filter, limit int, all
 	}
 	hits, err = s.s.Search(ctx, q, limit, all)
 	if err == nil && f.Mode == cql.ModeTitle && f.RawCQL == "" {
+		if len(hits) == 0 {
+			return hits, []string{titleNoHitsWarning}, nil
+		}
 		return hits, nil, s.fillSpaceIDs(ctx, hits)
 	}
 	if err == nil || f.Mode != cql.ModeSite || f.RawCQL != "" || domain.KindOf(err) != domain.ErrValidation {

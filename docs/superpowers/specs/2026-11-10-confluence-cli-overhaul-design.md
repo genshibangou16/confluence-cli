@@ -79,7 +79,7 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
 
 ### 4. 不具合の修正
 
-- タイトル検索は CQL の `title ~ "..."` に変え、部分一致させる。`--space-key` を反映する。
+- タイトル検索は CQL の `title ~ "..."` に変える。`title ~` はタイトルを語に分けて照合するため、文字列の部分一致にはならない。`--space-key` を反映する。
 - 全文検索は v1 `/rest/api/search` に変え、結果にスペースキー・抜粋・URL・最終更新日を出す。
 - CQL に埋め込む値は、`\` と `"` をエスケープする。
 - 抜粋の切り詰めは rune 単位にする。
@@ -111,7 +111,7 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
 - `--sort`（関連度順・更新日の新しい順）を追加する。CQL の `ORDER BY lastmodified DESC` で実現する。
 - すべてのコマンドで、スペースの指定に `--space-key` を受け付ける。space-id が必要な API には、`GET /spaces?keys=` で key を ID に変換して渡す。`--space-id` も残す。
 - ページングに対応する。`--limit` で指定した件数に達するまで次のページを取得する。`--all` で全件を取得する。
-- 引数のクエリでの検索は、既定で CQL の `siteSearch ~ "..."`（Confluence の画面の検索と同じ順位付け）を使う。タイトルと本文の両方が対象になり、1 回の呼び出しで済む。`--title` はタイトルだけの部分一致（`title ~`）として残す。全文検索だけを行う `--text`（`text ~`）も残す。
+- 引数のクエリでの検索は、既定で CQL の `siteSearch ~ "..."`（Confluence の画面の検索と同じ順位付け）を使う。タイトルと本文の両方が対象になり、1 回の呼び出しで済む。`--title` はタイトルだけの語の一致（`title ~`）として残し、結果が 0 件なら、別の語にするか `--title` を外して検索し直すよう警告を出す。全文検索だけを行う `--text`（`text ~`）も残す。
 - CQL を書かずに絞り込むフラグを追加する: `--label`（複数指定は AND）、`--type`（page・blogpost など、既定は page）、`--since`（`30d`・`2w`・`2026-01-01` などを `lastmodified >=` にする）、`--author`（accountId か、`me` で `currentUser()`）。これらは `--cql` と同時に指定でき、`--cql` の条件と AND で結合する。
 - タイトル検索の結果表には、スペースキーと space-id の両方を出す。
 - `--cql` に ORDER BY があれば、文字列リテラル（`"` か `'` で囲み、`\` でエスケープする）の外にある最後の ORDER BY から後ろを並び順として分け、条件部と絞り込みフラグの条件を AND で結合してから並び順を末尾に付ける。リテラルの中の ORDER BY では分けない。`--cql` の ORDER BY と `--sort` は同時に指定できない。
@@ -247,7 +247,7 @@ E2E テストでは、書式の多い合成フィクスチャ（`testdata/storag
 
 **検索**
 
-- `search <query>` は既定で `siteSearch ~`（Confluence の画面の検索と同じ順位付け）を使う。`--title` はタイトルの部分一致、`--text` は本文の全文検索だけ、`--cql` は CQL での検索。
+- `search <query>` は既定で `siteSearch ~`（Confluence の画面の検索と同じ順位付け）を使う。`--title` はタイトルの語の一致（文字列の部分一致ではない）、`--text` は本文の全文検索だけ、`--cql` は CQL での検索。
 - 絞り込みのフラグは `--label`（複数指定は AND）、`--type`（既定は page）、`--since`（`30d`、`2w`、`2026-01-01`）、`--author`（accountId か `me`）、`--sort relevance|modified`、`--all`。`--cql` と同時に指定すると AND で結合する。
 - スペースの指定は、すべてのコマンドで `--space-key` を受け付ける。
 

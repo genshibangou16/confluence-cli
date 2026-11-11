@@ -112,7 +112,7 @@ base_url: https://example.atlassian.net/wiki
 
 ```bash
 confluence-cli search "error handling"                       # siteSearch（Confluence の画面の検索と同じ順位付け）
-confluence-cli search "setup" --title                        # タイトルの部分一致
+confluence-cli search "setup" --title                        # タイトルの語の一致
 confluence-cli search "keyword" --text                       # 本文の全文検索だけ
 confluence-cli search "API" --space-key DEV --since 30d      # スペースと更新日で絞り込む
 confluence-cli search --cql "type = page AND label = important"
@@ -120,6 +120,8 @@ confluence-cli search --help-cql                             # CQL の書き方
 ```
 
 主なフラグ: `--space-key`、`--label`（複数指定は AND）、`--author`（accountId。`me` で自分）、`--since`（`30d`、`2w`、`2026-01-01`）、`--type`、`--sort relevance|modified`、`--limit`、`--all`、`--format table|json`。
+
+`--title` は CQL の `title ~` で検索する。Confluence はタイトルを語に分けて照合するため、タイトルに含まれる文字列でも一致しないことがある。たとえば `20250101_ABC週次MTG` というタイトルに対して、`ABC週次MTG` と `ABC週次` では一致せず、`週次MTG` では一致する。結果が 0 件なら、別の語にするか `--title` を外して検索し直すよう警告を出す。
 
 ### page
 
