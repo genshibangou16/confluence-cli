@@ -343,3 +343,77 @@ func TestUpdate_ReadBackFailure(t *testing.T) {
 		t.Fatalf("err = %v result = %+v", err, res)
 	}
 }
+
+func TestUpdate_MarkdownReplaceCommentOnlyAllowedByDropComments(t *testing.T) {
+	c, s := newUpdateCommand(WritePolicy{}, "<p>"+commentMarker+"</p>")
+	_, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("新しい本文\n"), Input: InputMarkdown, AllowDropComments: true})
+	if err != nil || s.updates != 1 {
+		t.Fatalf("err = %v updates = %d", err, s.updates)
+	}
+}
+
+func TestUpdate_DryRunWarnsOnLossy(t *testing.T) {
+	cur := `<ac:structured-macro ac:name="status"><ac:parameter ac:name="title">完了</ac:parameter></ac:structured-macro>`
+	c, s := newUpdateCommand(WritePolicy{}, cur)
+	res, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("新しい本文\n"), Input: InputMarkdown, DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "macro:status") || !strings.Contains(res.Warnings[0], "--allow-lossy") || s.updates != 0 {
+		t.Fatalf("result = %+v updates = %d", res, s.updates)
+	}
+}
+
+func TestUpdate_MalformedCurrentBodyRefused(t *testing.T) {
+	// 解析できない位置より後ろのマーカーを数え漏らさないように、現在の本文が整形式でなければ書き込まない。
+	cur := "<p>a<p>" + commentMarker
+	for name, r := range map[string]UpdateRequest{
+		"storage replace":  {ID: "20", Body: ptr("<p>新</p>"), Input: InputStorage},
+		"markdown replace": {ID: "20", Body: ptr("新\n"), Input: InputMarkdown},
+	} {
+		c, s := newUpdateCommand(WritePolicy{}, cur)
+		_, err := c.Update(context.Background(), r)
+		if domain.KindOf(err) != domain.ErrValidation || s.updates != 0 {
+			t.Errorf("%s: err = %v updates = %d", name, err, s.updates)
+		}
+	}
+}
+
+func TestUpdate_EmptyOrNoopRefused(t *testing.T) {
+	for name, r := range map[string]UpdateRequest{
+		"empty replace body": {ID: "20", Body: ptr(" \n\t"), Input: InputStorage},
+		"nothing to change":  {ID: "20", Input: InputStorage},
+	} {
+		c, s := newUpdateCommand(WritePolicy{}, "<p>旧</p>")
+		_, err := c.Update(context.Background(), r)
+		if domain.KindOf(err) != domain.ErrValidation || s.updates != 0 || s.gets != 0 {
+			t.Errorf("%s: err = %v updates = %d gets = %d", name, err, s.updates, s.gets)
+		}
+	}
+	c, s := newUpdateCommand(WritePolicy{}, "<p>旧</p>")
+	if _, err := c.Update(context.Background(), UpdateRequest{ID: "20", Input: InputStorage, Message: "版コメントだけ"}); err != nil || s.gotBody != "<p>旧</p>" || s.gotMessage != "版コメントだけ" {
+		t.Fatalf("message only: err = %v body = %q message = %q", err, s.gotBody, s.gotMessage)
+	}
+}
+
+func TestUpdate_DryRunDiffSplitsBlocks(t *testing.T) {
+	cur := "<h2>A</h2><p>a1</p><p>a2</p><h2>B</h2><p>b</p>"
+	c, _ := newUpdateCommand(WritePolicy{}, cur)
+	res, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("<p>新</p>"), Input: InputStorage, Mode: ModeSection, Section: "A", DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var minus, plus []string
+	for _, l := range strings.Split(res.Diff, "\n") {
+		switch {
+		case strings.HasPrefix(l, "---"), strings.HasPrefix(l, "+++"):
+		case strings.HasPrefix(l, "-"):
+			minus = append(minus, l)
+		case strings.HasPrefix(l, "+"):
+			plus = append(plus, l)
+		}
+	}
+	if strings.Join(minus, "|") != "-<p>a1</p>|-<p>a2</p>" || strings.Join(plus, "|") != "+<p>新</p>" {
+		t.Fatalf("diff:\n%s", res.Diff)
+	}
+}

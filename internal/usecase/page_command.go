@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/aymanbagabas/go-udiff"
@@ -194,25 +195,45 @@ func (c *PageCommand) Update(ctx context.Context, r UpdateRequest) (WriteResult,
 		return WriteResult{}, err
 	}
 
+	if r.Body != nil && r.Mode == ModeReplace {
+		// CountCommentMarkers と LossyElements は解析できない位置で数えるのをやめるため、整形式でない本文ではマーカーや要素を数え漏らす。
+		if err := storage.Validate(cur.Body); err != nil {
+			return WriteResult{}, &domain.Error{
+				Kind:    domain.ErrValidation,
+				Message: fmt.Sprintf("ページ %s の現在の本文が整形式でないため、置き換えで失われる要素を確認できません: %v", r.ID, err),
+				Err:     err,
+			}
+		}
+	}
+
 	var warnings []string
+	// DryRun では、書き込まずに失われるものを確認できるように、エラーにせず警告として返す。
+	refuse := func(kind domain.ErrorKind, msg string) error {
+		if r.DryRun {
+			warnings = append(warnings, msg)
+			return nil
+		}
+		return &domain.Error{Kind: kind, Message: msg}
+	}
 	if n := storage.CountCommentMarkers(replaced); n > 0 && !r.AllowDropComments {
 		msg := fmt.Sprintf("置き換える範囲にインラインコメントのマーカーが %d 個あり、更新するとコメントが本文から外れます。外してよい場合は --allow-drop-comments を指定してください", n)
-		if !r.DryRun {
-			return WriteResult{}, &domain.Error{Kind: domain.ErrCommentLoss, Message: msg}
+		if err := refuse(domain.ErrCommentLoss, msg); err != nil {
+			return WriteResult{}, err
 		}
-		warnings = append(warnings, msg)
 	}
 	if r.Body != nil && r.Input == InputMarkdown && r.Mode == ModeReplace && !r.AllowLossy {
-		if lossy := storage.LossyElements(cur.Body); len(lossy) > 0 {
-			return WriteResult{}, &domain.Error{
-				Kind:    domain.ErrLossy,
-				Message: "現在の本文に Markdown で表せない要素があり、本文全体を置き換えると失われます: " + strings.Join(lossy, ", ") + "。失ってよい場合は --allow-lossy を指定してください",
+		// インラインコメントは上の確認と --allow-drop-comments で扱うため、ここでは数えない。
+		lossy := slices.DeleteFunc(storage.LossyElements(cur.Body), func(e string) bool { return e == "inline-comment" })
+		if len(lossy) > 0 {
+			msg := "現在の本文に Markdown で表せない要素があり、本文全体を置き換えると失われます: " + strings.Join(lossy, ", ") + "。失ってよい場合は --allow-lossy を指定してください"
+			if err := refuse(domain.ErrLossy, msg); err != nil {
+				return WriteResult{}, err
 			}
 		}
 	}
 
 	if r.DryRun {
-		diff := udiff.Unified("current", "new", cur.Body, body)
+		diff := udiff.Unified("current", "new", splitBlocks(cur.Body), splitBlocks(body))
 		if title != cur.Title {
 			diff = fmt.Sprintf("タイトル: %q → %q\n", cur.Title, title) + diff
 		}
@@ -243,8 +264,27 @@ func validateUpdate(r UpdateRequest) error {
 	if r.Body == nil && r.Mode != ModeReplace {
 		return validationError("追記・先頭への追加・節の置き換えには本文を指定してください")
 	}
+	// 入力元のパイプが失敗して本文が空になったときに、ページの本文を消さないようにする。
+	if r.Body != nil && r.Mode == ModeReplace && strings.TrimSpace(*r.Body) == "" {
+		return validationError("本文が空です。本文全体を空にする更新はできません")
+	}
+	if r.Title == nil && r.Body == nil && r.Message == "" {
+		return validationError("タイトル・本文・版コメントのいずれも指定されていないため、更新する内容がありません")
+	}
 	return nil
 }
+
+// diffLineBreaker は、改行を含まないことが多い storage 形式の本文を、diff の行がブロック要素ごとになるように改行する。
+var diffLineBreaker = func() *strings.Replacer {
+	var pairs []string
+	for _, tag := range []string{"</p>", "</h1>", "</h2>", "</h3>", "</h4>", "</h5>", "</h6>", "</li>", "</tr>", "</table>", "</ul>", "</ol>", "</blockquote>", "</ac:structured-macro>", "</ac:layout-section>", "<hr />", "<hr/>"} {
+		pairs = append(pairs, tag, tag+"\n")
+	}
+	return strings.NewReplacer(pairs...)
+}()
+
+// splitBlocks は dry-run の diff の表示だけに使う。送る本文には使わない。
+func splitBlocks(body string) string { return diffLineBreaker.Replace(body) }
 
 // newBody は r に従って新しい本文を作り、現在の本文のうち置き換えられる範囲も返す。
 // 置き換えられる範囲は、インラインコメントのマーカーが外れるかの判定に使う。
