@@ -224,6 +224,19 @@ func TestFindSection_IgnoresNestedSameName(t *testing.T) {
 	}
 }
 
+func TestFindSection_EmptyTitle(t *testing.T) {
+	body := "<h2></h2><p>x</p>"
+	for _, title := range []string{"", "  ", "\u00a0\t"} {
+		_, err := FindSection(body, title)
+		de := wantValidation(t, err)
+		if !strings.Contains(de.Message, "見出しを指定") {
+			t.Errorf("message = %q", de.Message)
+		}
+		_, err = ReplaceSection(body, title, "<p/>")
+		wantValidation(t, err)
+	}
+}
+
 func TestFindSection_NotFound(t *testing.T) {
 	for _, body := range []string{"", "<p>x</p>", `<ac:structured-macro ac:name="expand"><ac:rich-text-body><h2>X</h2></ac:rich-text-body></ac:structured-macro>`} {
 		_, err := FindSection(body, "X")
@@ -294,7 +307,10 @@ func TestAppendPrepend_EmptyBody(t *testing.T) {
 
 // testdata/private には実際のページの storage 形式を置く。公開できないため git の管理外で、無い環境ではスキップする。
 func TestSections_PrivateFixtures(t *testing.T) {
-	files, _ := filepath.Glob("../../testdata/private/*.xml")
+	files, err := filepath.Glob("../../testdata/private/*.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(files) == 0 {
 		t.Skip("testdata/private にフィクスチャがありません")
 	}
@@ -321,7 +337,7 @@ func TestSections_PrivateFixtures(t *testing.T) {
 				continue
 			}
 			s, err := FindSection(body, h.Text)
-			if count[h.Text] > 1 {
+			if h.Text == "" || count[h.Text] > 1 {
 				wantValidation(t, err)
 				continue
 			}
@@ -333,7 +349,11 @@ func TestSections_PrivateFixtures(t *testing.T) {
 			if err != nil || same != body {
 				t.Errorf("%s: ReplaceSection with the same content changed the body (heading at %d, err %v)", filepath.Base(f), h.Start, err)
 			}
-			replaced, _ := ReplaceSection(body, h.Text, "<p>x</p>")
+			replaced, err := ReplaceSection(body, h.Text, "<p>x</p>")
+			if err != nil {
+				t.Errorf("%s: ReplaceSection(heading at %d) = %v", filepath.Base(f), h.Start, err)
+				continue
+			}
 			if err := Validate(replaced); err != nil {
 				t.Errorf("%s: replacing heading at %d makes the body malformed: %v", filepath.Base(f), h.Start, err)
 			}

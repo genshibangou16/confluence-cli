@@ -139,11 +139,14 @@ func Headings(body string) ([]Heading, error) {
 // 該当する要素が無ければ親の終了タグの先頭（親がルートなら本文の末尾、ac:layout-cell ならそのセルの終わり）まで。
 // 範囲を親の子要素の境界で区切るため、範囲を置き換えても要素の入れ子は崩れない。
 func FindSection(body, title string) (Section, error) {
+	want := normalize(title)
+	if want == "" {
+		return Section{}, &domain.Error{Kind: domain.ErrValidation, Message: "見出しを指定してください"}
+	}
 	t, err := parse(body)
 	if err != nil {
 		return Section{}, err
 	}
-	want := normalize(title)
 	var matches []int
 	for _, idx := range t.headings {
 		if h := t.heading(idx); h.TopLevel && h.Text == want {
