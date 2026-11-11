@@ -137,6 +137,7 @@ confluence-cli page update <page> --body "<p>x</p>" --dry-run
 confluence-cli page delete <page>
 ```
 
+- `page get` の Markdown（既定）と `--outline` は、標準出力に本文か見出しの一覧だけを出し、id・title・version・url の 4 行と区切りの `---` を標準エラーに出す。`--format storage` は本文だけを標準出力に、版番号を標準エラーに出す。どちらも標準出力をファイルに保存して編集し、`page update <page> --body-file <file>`（Markdown なら `--input-format markdown` も付ける）で戻せる。
 - `page create` と `page update` の本文は `--body` か `--body-file`（`-` なら標準入力）で渡す。形式は `--input-format storage|markdown`（既定は `storage`）。
 - `page update` の `--append`・`--prepend`・`--section` は同時に指定できず、指定しなかった部分の本文は変えない。
 - `--expect-version <n>` は、現在の版番号が `n` でなければ更新しない。`--message` は版コメント。

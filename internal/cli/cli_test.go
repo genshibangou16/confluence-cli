@@ -186,23 +186,18 @@ func headingEnv(t *testing.T) *env {
 	return newEnv(t, map[string]http.HandlerFunc{"/wiki/api/v2/pages/1234567890": reply(headingPageBody)})
 }
 
-func TestPageGet_MarkdownHeader(t *testing.T) {
+func TestPageGet_MarkdownHeaderToStderr(t *testing.T) {
+	// 標準出力をそのまま page update --input-format markdown に渡せるよう、標準出力には本文だけを出す。
 	e := headingEnv(t)
 	if code := e.run("page", "get", "1234567890"); code != 0 {
 		t.Fatalf("code = %d, stderr = %s", code, e.stderr)
 	}
-	lines := strings.Split(e.stdout.String(), "\n")
-	want := []string{"id: 1234567890", "title: T", "version: 7"}
-	for i, w := range want {
-		if lines[i] != w {
-			t.Fatalf("line %d = %q, want %q", i, lines[i], w)
-		}
-	}
-	if !strings.HasPrefix(lines[3], "url: ") || lines[4] != "---" || lines[5] != "# A" {
+	if !strings.HasPrefix(e.stdout.String(), "# A\n") || strings.Contains(e.stdout.String(), "id: ") || strings.Contains(e.stdout.String(), "---") {
 		t.Fatalf("stdout = %q", e.stdout)
 	}
-	if e.stderr.Len() != 0 {
-		t.Fatalf("stderr = %q", e.stderr)
+	want := "id: 1234567890\ntitle: T\nversion: 7\nurl: /spaces/X/pages/1234567890\n---\n"
+	if e.stderr.String() != want {
+		t.Fatalf("stderr = %q, want %q", e.stderr, want)
 	}
 }
 
@@ -211,9 +206,11 @@ func TestPageGet_Outline(t *testing.T) {
 	if code := e.run("page", "get", "1234567890", "--outline"); code != 0 {
 		t.Fatalf("code = %d, stderr = %s", code, e.stderr)
 	}
-	lines := strings.Split(strings.TrimRight(e.stdout.String(), "\n"), "\n")
-	if len(lines) != 7 || lines[4] != "- A" || lines[5] != "  - A-1" || lines[6] != "- B" {
+	if e.stdout.String() != "- A\n  - A-1\n- B\n" {
 		t.Fatalf("stdout = %q", e.stdout)
+	}
+	if !strings.HasPrefix(e.stderr.String(), "id: 1234567890\n") || !strings.HasSuffix(e.stderr.String(), "---\n") {
+		t.Fatalf("stderr = %q", e.stderr)
 	}
 }
 

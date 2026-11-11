@@ -58,8 +58,8 @@ func newPageGetCmd(d Deps) *cobra.Command {
 		Short: "ページを取得する",
 		Long: `ページを取得する。
 
---format markdown（既定）は id・title・version・url の 4 行、区切りの --- 、本文の Markdown を標準出力に出す。
---outline は本文の代わりに、トップレベルの見出しをレベルに応じてインデントした一覧を出す。
+--format markdown（既定）は本文の Markdown を標準出力に出し、id・title・version・url の 4 行と区切りの --- を標準エラーに出す。
+--outline は本文の代わりに、トップレベルの見出しをレベルに応じてインデントした一覧を標準出力に出す。
 --section は指定した見出しの節の中身だけを出す。--outline とは同時に指定できない。
 --format storage は本文（storage 形式）だけを標準出力に、版番号を標準エラーに出す。
 --format json はページの情報と content を 1 行の JSON で出す。content の形式は --content-format（markdown, storage）で選ぶ。`,
@@ -113,7 +113,8 @@ func newPageGetCmd(d Deps) *cobra.Command {
 				_, err = io.WriteString(d.Stdout, v.Content)
 				return err
 			}
-			fmt.Fprintf(d.Stdout, "id: %s\ntitle: %s\nversion: %d\nurl: %s\n",
+			// 標準出力を page update --input-format markdown に渡したときにページの情報が本文に入らないよう、ページの情報は標準エラーに出す。
+			fmt.Fprintf(d.Stderr, "id: %s\ntitle: %s\nversion: %d\nurl: %s\n---\n",
 				p.ID, output.SanitizeText(p.Title), p.Version.Number, output.SanitizeText(p.WebURL))
 			if outline {
 				for _, o := range v.Outline {
@@ -121,7 +122,7 @@ func newPageGetCmd(d Deps) *cobra.Command {
 				}
 				return nil
 			}
-			_, err = io.WriteString(d.Stdout, "---\n"+output.SanitizeMultiline(v.Content))
+			_, err = io.WriteString(d.Stdout, output.SanitizeMultiline(v.Content))
 			return err
 		},
 	}

@@ -179,10 +179,16 @@ func TestE2E_CreateMarkdownAndStorage(t *testing.T) {
 	if got := e.storage(t, sid); got != storageBody {
 		t.Errorf("作成した本文が送った本文と一致しない:\n%s", got)
 	}
-	md := e.mustRun(t, "page", "get", sid)
-	for _, s := range []string{"id: " + sid, "version: 1", "# 見出し1", "## 節A", "A の本文"} {
-		if !strings.Contains(md, s) {
-			t.Errorf("markdown の出力に %q がない:\n%s", s, md)
+	md, header, code := e.run("page", "get", sid)
+	if code != 0 {
+		t.Fatalf("page get の終了コードが %d: %s", code, header)
+	}
+	if !strings.HasPrefix(md, "# 見出し1\n") || !strings.Contains(md, "## 節A") || !strings.Contains(md, "A の本文") || strings.Contains(md, "id: ") {
+		t.Errorf("markdown の標準出力が本文だけになっていない:\n%s", md)
+	}
+	for _, s := range []string{"id: " + sid + "\n", "version: 1\n", "---\n"} {
+		if !strings.Contains(header, s) {
+			t.Errorf("markdown の標準エラーに %q がない:\n%s", s, header)
 		}
 	}
 	p := e.pageJSON(t, sid)
