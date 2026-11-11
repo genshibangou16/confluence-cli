@@ -33,7 +33,8 @@ CONFLUENCE_E2E_ROOT=<page id> go test -tags e2e -count=1 ./e2e/...
 ```
 
 - Pass the page id through the environment only. Never write it into files, tests, or commit messages.
-- Write commands (`page create/update/delete`, `label add/remove`) must go through `env.write` in `e2e/helper_test.go`, which refuses any target that is not a descendant of the test root.
+- Write commands (`page create/update/delete`, `label add/remove`) must go through `env.write` in `e2e/helper_test.go`, which refuses any target that is not a descendant of the test root. The test root itself can be the target only as the parent of `page create` and for restoring it during cleanup.
+- Concurrent E2E runs against the same test root are not supported.
 - Without `CONFLUENCE_E2E_ROOT` the tests skip.
 
 ### Public repository

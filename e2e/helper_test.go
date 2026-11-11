@@ -419,45 +419,46 @@ func (e *env) cleanup(t *testing.T) {
 			}
 		}
 	}
-	e.checkRoot(t)
+	e.checkRoot(t.Errorf)
 }
 
 // checkRoot はテストルートのタイトルと本文が開始時と同じかを確認し、違えば開始時の状態に戻す。
 // テストはテストルートを書き換えないため、版番号が変わっていれば失敗にする。
-func (e *env) checkRoot(t *testing.T) {
+// 確認と復元の失敗は errorf で報告する。偽のバイナリで確かめるテストが、*testing.T を失敗させずに報告を受け取るために関数で受ける。
+func (e *env) checkRoot(errorf func(format string, args ...any)) {
 	out, errOut, code := e.run("page", "get", e.root, "--format", "json", "--content-format", "storage")
 	if code != 0 {
-		t.Errorf("後片付け: テストルートを取得できない: %s", errOut)
+		errorf("後片付け: テストルートを取得できない: %s", errOut)
 		return
 	}
 	var p pageJSON
 	if err := json.Unmarshal([]byte(out), &p); err != nil {
-		t.Errorf("後片付け: テストルートを解釈できない: %v", err)
+		errorf("後片付け: テストルートを解釈できない: %v", err)
 		return
 	}
 	if p.Version != e.rootVersion {
-		t.Errorf("後片付け: テストルートの版が %d から %d に変わった", e.rootVersion, p.Version)
+		errorf("後片付け: テストルートの版が %d から %d に変わった", e.rootVersion, p.Version)
 	}
 	if p.Title == e.rootTitle && p.Content == e.rootBody {
 		return
 	}
 	e.restoringRoot = true
 	defer func() { e.restoringRoot = false }()
-	logErr := func(format string, args ...any) { t.Errorf(format, args...) }
 	if strings.TrimSpace(e.rootBody) == "" {
+		if p.Title != e.rootTitle {
+			if _, errOut, code := e.guardedWrite(errorf, e.root, "", "page", "update", "--title", e.rootTitle); code != 0 {
+				errorf("後片付け: テストルートのタイトルを戻せない: %s", errOut)
+			}
+		}
 		// page update は本文全体を空にする更新を拒否するため、本文が変わっていれば CLI では空に戻せない。
 		if p.Content != e.rootBody {
-			t.Errorf("後片付け: テストルートの本文が変わったが、開始時の本文が空のため CLI では戻せない。Web UI で戻す")
-			return
-		}
-		if _, errOut, code := e.guardedWrite(logErr, e.root, "", "page", "update", "--title", e.rootTitle); code != 0 {
-			t.Errorf("後片付け: テストルートのタイトルを戻せない: %s", errOut)
+			errorf("後片付け: テストルートの本文が変わったが、開始時の本文が空のため CLI では戻せない。Web UI で戻す")
 		}
 		return
 	}
-	if _, errOut, code := e.guardedWrite(logErr, e.root, e.rootBody, "page", "update", "--title", e.rootTitle,
+	if _, errOut, code := e.guardedWrite(errorf, e.root, e.rootBody, "page", "update", "--title", e.rootTitle,
 		"--body-file", "-", "--allow-drop-comments", "--allow-lossy"); code != 0 {
-		t.Errorf("後片付け: テストルートを戻せない: %s", errOut)
+		errorf("後片付け: テストルートを戻せない: %s", errOut)
 	}
 }
 

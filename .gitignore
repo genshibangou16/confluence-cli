@@ -44,3 +44,6 @@ confluence-*
 # Private test data
 testdata/private/
 /confluence-cli
+
+# Agent working files
+.superpowers/
