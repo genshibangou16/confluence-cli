@@ -94,6 +94,7 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
 - 429 と 503 には、`Retry-After` の秒数だけ待ってリトライする。`Retry-After` がなければ jitter 付きの指数バックオフでリトライする。リトライの対象は GET・PUT・DELETE とし、POST（ページ作成とラベル付与）はリトライしない。
 - 401・403 のエラーメッセージで、API トークンの失効（有効期限は最長 1 年）とスコープ不足を原因の候補として案内する。スコープ付きトークンでは、v1 API（検索・ラベル）に classic スコープ（`search:confluence`、`write:confluence-content` など）が要る。呼び出した API に必要なスコープ名をメッセージに含める。必要なスコープの正確な名前は公式ドキュメントで確認してから実装する。
 - 設定に `api_token_command` を追加する。指定すると、そのコマンドをシェルを介さずに実行し、標準出力の 1 行目を API トークンとして使う（例: macOS のキーチェーンから取り出す `security find-generic-password -s confluence-cli -w`）。`api_token` と両方あれば `api_token_command` を優先する。ローカル設定の `api_token_command` は読まない（`api_token` と同じ理由）。
+- `--format json` とエラーの JSON の出力では、C1 制御文字（U+0080〜U+009F）と双方向制御文字（U+061C、U+200E、U+200F、U+202A〜U+202E、U+2066〜U+2069）を `\uXXXX` にエスケープする。encoding/json はこれらの文字をそのまま出力し、端末に表示すると Confluence 由来の文字列で端末の表示を変えられるため。デコードすると元の文字列に戻る。
 - 書き込みを制限する設定を追加する。
   - `read_only: true`（環境変数 `CONFLUENCE_READ_ONLY=1`）: 書き込み系のコマンド（create・update・delete・label add/remove）を、API を呼ばずにエラーで終了させる。
   - `writable_spaces: [<space-key>, ...]`: 指定すると、書き込みの対象ページがこれらのスペースにあるときだけ書き込みを許可する。対象ページのスペースは書き込みの前に API で確認する。
@@ -111,6 +112,7 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
 - 引数のクエリでの検索は、既定で CQL の `siteSearch ~ "..."`（Confluence の画面の検索と同じ順位付け）を使う。タイトルと本文の両方が対象になり、1 回の呼び出しで済む。`--title` はタイトルだけの部分一致（`title ~`）として残す。全文検索だけを行う `--text`（`text ~`）も残す。
 - CQL を書かずに絞り込むフラグを追加する: `--label`（複数指定は AND）、`--type`（page・blogpost など、既定は page）、`--since`（`30d`・`2w`・`2026-01-01` などを `lastmodified >=` にする）、`--author`（accountId か、`me` で `currentUser()`）。これらは `--cql` と同時に指定でき、`--cql` の条件と AND で結合する。
 - タイトル検索の結果表には、スペースキーと space-id の両方を出す。
+- `--cql` に ORDER BY があれば、文字列リテラル（`"` か `'` で囲み、`\` でエスケープする）の外にある最後の ORDER BY から後ろを並び順として分け、条件部と絞り込みフラグの条件を AND で結合してから並び順を末尾に付ける。リテラルの中の ORDER BY では分けない。`--cql` の ORDER BY と `--sort` は同時に指定できない。
 
 **トークン効率**
 
@@ -123,6 +125,8 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
   - 画像と添付ファイルはファイル名を残す。
   - 変換規則のないマクロは、マクロ名を残したプレースホルダーにして、内容を捨てたことが読み手に分かるようにする。
 - `page get` の既定の形式を `markdown` にする。storage 形式の HTML が必要な場合は `--format storage` を使う。`--format json` も残す。
+- `page get` の markdown と `--outline` は、標準出力に本文か見出しの一覧だけを出し、id・title・version・url の 4 行と区切りの `---` を標準エラーに出す。標準出力をそのまま `page update --input-format markdown --body-file -` に渡したときに、ページの情報が本文に入らないようにするため。
+- `page get --format storage` は、本文を標準出力に、版番号を標準エラーに出す。標準出力が端末でなければ、取得した storage 形式をバイト単位でそのまま出す。`page update --body-file` に渡して書き戻したときに本文が一致するようにするため。標準出力が端末なら、制御文字を除き、末尾に改行が無ければ足して出す。`--section` と組み合わせたときも同じ。
 - `page get --outline` で、見出しの一覧（レベルとテキスト）だけを出力する。
 - `page get --section "<見出し>"` で、指定した見出しから、同じかより上位のレベルの次の見出しの直前までを出力する。見出しが複数一致したら、一致した見出しの一覧を示してエラーで終了する。`--format` のすべての形式と組み合わせられる。
 - `create`・`update` の成功時の出力を、ID・タイトル・版番号・URL だけにする。`--format json` で全体を出せるようにする。
@@ -175,7 +179,7 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
 
 ### 8. テスト
 
-テストは次の 2 層で行う。
+テストは次の 2 層で行う。E2E テストは実装中に 1 回だけ実行し、リポジトリにはユニットテストだけを置く。
 
 **ユニットテスト**（`go test ./...`）
 
@@ -183,30 +187,21 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
 - 対象は、CQL の組み立てとエスケープ、storage から Markdown への変換、Markdown から storage への変換、XML の整形式チェック、見出しによる節の切り出しと置き換え、URL と tiny link からの page-id 解決、設定の読み込みと送信先の制限、cloudId のキャッシュ、リトライ、ページング、版番号の照合、各コマンドの出力形式。
 - Markdown から storage への変換は、スキルの変換リファレンスにある例を入力と期待値にしたテーブルテストにする。
 
-**E2E テスト**（実際の Confluence に対して実行する）
+**E2E テスト**（実際の Confluence に対して実行した。2026-11-11 時点）
 
-- 利用者が渡すテスト用ページ（以下「テストルート」）を使う。テストルートの page-id は環境変数 `CONFLUENCE_E2E_ROOT` で渡し、リポジトリには書かない。テストルートは利用者の personal space にあるページで、2026-11-10 時点では本文が空、子ページはない。
-- ビルドタグ `e2e` を付け、`go test -tags e2e ./e2e/...` で実行する。通常の `go test ./...` では実行しない。環境変数がなければスキップする。
-- テストはビルドしたバイナリをサブプロセスとして実行し、標準出力・標準エラー・終了コードを確認する。
-- 書き込みが許可されているのは、テストルートとその子孫だけである。それ以外のページは読み取りだけ許可されている。これを守るため、次のようにする。
-  - E2E テストのヘルパーは、書き込み系コマンドを実行する前に、対象ページがテストルートか、`ancestors` にテストルートを含むページであることを API で確認する。確認できなければテストを失敗させ、コマンドを実行しない。
-  - ページの新規作成は、親にテストルートかその子孫を指定する。
-  - テストで作った子ページは、テストの終了時（失敗時を含む）に削除する。
-  - テストルートの本文とタイトルはテストの開始時に保存し、終了時に元に戻す。
-- 確認する内容は次のとおり。
-  - 子ページの作成（storage と markdown の両方の入力）、取得（markdown・storage・json・`--outline`・`--section`）、更新（全体・`--append`・`--prepend`・`--section`・タイトルだけ・`--message`）、削除
-  - 版番号を渡したときの照合: 別の更新を挟んだあとに古い版番号で更新すると、エラーで終了し、本文が変わらないこと
-  - `--dry-run` で本文が変わらないこと
-  - 整形式でない storage 形式を渡すと、API を呼ばずにエラーで終了すること
-  - ラベルの付与・削除と、`label pages`・`search --label` で付与したラベルが見えること（検索インデックスの反映待ちは、一定時間ポーリングする）
+- 実装中に 1 回、利用者が指定したテスト用のページ（利用者の personal space にあるページ。以下「テストルート」）とその子ページに対して、利用者の許可を得て実行した。
+- Confluence への書き込みは、今回の実装中のテストに限って利用者が許可した。このため、Confluence に書き込むテストコードはリポジトリに残していない。今後の変更の確認はユニットテストで行う。
+- テストはビルドしたバイナリをサブプロセスとして実行し、標準出力・標準エラー・終了コードを確認した。書き込み系コマンドは、対象ページがテストルートかテストルートの子孫であることを API で確認してから実行した。
+- 確認した内容は次のとおり。
+  - 子ページの作成（storage と markdown の両方の入力）、取得、更新、削除
+  - `--expect-version` での版番号の照合、`--dry-run` で本文が変わらないこと、整形式でない storage 形式で API を呼ばないこと
+  - ラベルの付与・削除と、`label pages`・`search --label` での確認
   - `page children`・`page ancestors`・`page versions`・`page get --version`
   - ページ URL と tiny link での指定
-  - `read_only` と `writable_spaces` の設定で、書き込みが API を呼ばずに拒否されること（テストルートのスペースを許可リストから外した設定で確認する）
-  - インラインコメントのマーカーを含む節を `--section` で置き換えると、`--allow-drop-comments` なしでは拒否されること（マーカーはフィクスチャに含める）
-  - 変換規則のないマクロを含むページを `--input-format markdown` で全体を置き換えると、`--allow-lossy` なしでは拒否されること
+  - `read_only` と `writable_spaces` の設定で書き込みが拒否され、`--dry-run` は成功すること
+  - インラインコメントのマーカーと、Markdown で表せない要素による拒否
   - `--format json` での失敗時に、標準エラーに JSON が 1 つだけ出ること
-  - 読み取り系: テストルート以外のページに対する `search`（siteSearch・`--title`・`--text`・`--cql`・各絞り込みフラグ）
-- 実行には利用者の API トークンを使う。CI では実行しない。
+  - 読み取り系の `search`（siteSearch・`--title`・`--text`・`--cql`・各絞り込みフラグ）
 
 **既存ページの編集でフォーマットを壊さないことの確認**
 
@@ -217,23 +212,13 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
 - 部分更新（`--append`・`--prepend`・`--section`）と、タイトルだけの更新は、既存の storage 形式を文字列として扱い、対象範囲の外側をバイト単位でそのまま残す。storage 形式を XML として解析して再シリアライズすると、属性の順序・空白・実体参照・CDATA の表記が変わるため、出力には解析結果を使わない。解析は、見出しの位置（バイトオフセット）を求めるためだけに使う。
 - 見出しの探索では、マクロの中（`ac:rich-text-body` の中、たとえばパネルや expand の中）にある見出しと、トップレベルの見出しを区別する。`--section` が対象にするのはトップレベルの見出しだけとする。ただし、トップレベルの要素が `ac:layout`（ページレイアウト）の場合は、各 `ac:layout-cell` の直下をトップレベルとして扱う。
 
-E2E テストでは、次の手順で確認する。
+E2E テストでは、書式の多い合成フィクスチャ（`testdata/storage/*.xml`）をテストルートの子ページとして作成し、作成直後の storage 形式をベースラインとして、操作のたびにベースラインと比べた。結果は次のとおり。
 
-1. 書式の多いフィクスチャ（storage 形式）を用意し、テストルートの子ページとして作成する。フィクスチャには少なくとも次を含める。
-   - 見出し（h1〜h3）、ネストしたリスト、結合セルを含むテーブル
-   - code マクロ（CDATA の中に `<`・`&`・`]]>` の分割を含む）
-   - info・note・warning・tip パネル、expand マクロ（中に見出しを含む）、status マクロ、toc マクロ
-   - タスクリスト、ユーザーメンション（`ri:user`）、ページリンク（`ri:page`）、絵文字（`ac:emoticon`）、アンカー
-   - ページレイアウト（`ac:layout`）、`&nbsp;` などの実体参照、日本語の本文
-2. 作成直後に storage 形式を取得し、ベースラインとして保存する。ベースラインは、Confluence が保存時に行う正規化（`ac:macro-id` の付与など）を反映した状態である。
-3. 次の操作を 1 つずつ行い、操作のたびに storage 形式を取得してベースラインと比べる。
-   - タイトルだけの更新、`--message` だけを付けた更新: 本文がベースラインとバイト単位で一致すること
-   - `page get --format storage` の出力をそのまま `page update --body-file` で書き戻す: 本文がベースラインと一致すること
-   - `--append`・`--prepend`: ベースライン部分が、追加した本文の前後でバイト単位で一致すること
-   - `--section`: 対象の節の外側がベースラインと一致し、置き換えた節に新しい本文が入っていること。expand の中にある同名の見出しが変更されていないこと
-   - `--input-format markdown` での部分更新: 既存部分が一致し、追加部分が期待した storage 形式（マクロを含む）になっていること
-4. 一致しなかった場合は、差分を出力してテストを失敗させる。
-5. Confluence が更新時に既存部分を正規化し直して、CLI の処理と関係なく差分が出る場合がある。その場合は差分の内容をテスト結果に残し、正規化の内容を確認してから比較の方法を決める。比較を緩めるときは、緩めた理由をテストのコメントに書く。
+- タイトルだけの更新、`--message` だけを付けた更新、`page get --format storage` の出力の `page update --body-file` での書き戻し、`--append`、`--prepend`、`--section`、`--input-format markdown` での部分更新のすべてで、既存部分はベースラインとバイト単位で一致した。
+- `--section` では、expand の中にある同名の見出しは変更されなかった。
+- Confluence は次の正規化を行う。
+  - 新しく挿入したマクロに `ac:macro-id` を付ける。既存のマクロの `ac:macro-id` は変えない。
+  - 本文の末尾の改行を削除する。
 
 あわせて、実在するページ（テストルート以外、読み取りだけ）の storage 形式を数件取得し、ユニットテストのフィクスチャにする。このフィクスチャで次を確認する。
 
@@ -243,10 +228,60 @@ E2E テストでは、次の手順で確認する。
 
 フィクスチャには社内の情報が含まれるため、リポジトリにはコミットせず、`.gitignore` に入れたディレクトリに置く。リポジトリには、自作した合成フィクスチャだけをコミットする。
 
+## confluence-cli スキルの修正で合わせる変更点
+
+スキルは利用者が別途修正する。スキルが前提にしている CLI の挙動のうち、改修で変わったものは次のとおり。
+
+**出力**
+
+- `page get` の既定の形式は Markdown。標準出力には本文だけを出し、id・title・version・url の 4 行と区切りの `---` を標準エラーに出す。
+- `page get --format storage` は本文を標準出力に、版番号を標準エラーに出す。標準出力がパイプかファイルならバイト単位でそのまま出し、端末なら制御文字を除いて末尾に改行を足す。書き戻しに使う本文は、端末に表示したものではなく、ファイルかパイプに出したものを使う。
+- `--format json` の出力は 1 行の JSON で、キーは camelCase（`spaceId`、`spaceKey`、`lastModified`、`createdAt` など）。C1 制御文字と双方向制御文字は `\uXXXX` にエスケープする。
+- `page get` に `--version <n>`（過去版の取得）、`--outline`（見出しの一覧）、`--section "<見出し>"`（指定した節だけ）がある。
+
+**検索**
+
+- `search <query>` は既定で `siteSearch ~`（Confluence の画面の検索と同じ順位付け）を使う。`--title` はタイトルの部分一致、`--text` は本文の全文検索だけ、`--cql` は CQL での検索。
+- 絞り込みのフラグは `--label`（複数指定は AND）、`--type`（既定は page）、`--since`（`30d`、`2w`、`2026-01-01`）、`--author`（accountId か `me`）、`--sort relevance|modified`、`--all`。`--cql` と同時に指定すると AND で結合する。
+- スペースの指定は、すべてのコマンドで `--space-key` を受け付ける。
+
+**ページの指定**
+
+- `<page>` には、ページ ID、ページの URL、tiny link（`/wiki/x/<code>`）のいずれかを指定できる。
+
+**作成と更新**
+
+- `page create` と `page update` は `--input-format markdown|storage`（既定は storage）を受け付ける。本文は `--body` か `--body-file`（`-` なら標準入力）で渡す。
+- `page update` には次のフラグがある。
+  - `--append`・`--prepend`・`--section "<見出し>"`: 指定しなかった部分の本文を変えずに残す。同時には指定できない。
+  - `--expect-version <n>`: 現在の版番号が `n` でなければ更新しない。
+  - `--message`: 版コメント。
+  - `--dry-run`: 更新せず、差分を出す。
+  - `--title` は省略でき、省略すると現在のタイトルを残す。本文を指定しなければ本文を残す。
+- 次の場合は、上書き用のフラグを付けない限り更新しない。
+  - Markdown の入力で置き換える範囲に、Markdown で表せない要素がある（`--allow-lossy`）。
+  - 置き換える範囲のインラインコメントのマーカーが新しい本文に残らない（`--allow-drop-comments`）。
+- GitHub Alerts とパネルマクロの対応は、NOTE・IMPORTANT→info、TIP→tip、WARNING→note、CAUTION→warning。スキルの変換リファレンス（`references/markdown-to-confluence.md`）にある WARNING→warning、CAUTION→note とは異なる。`page get` の Markdown では逆向き（info→NOTE、tip→TIP、note→WARNING、warning→CAUTION）に変換する。
+- Markdown から storage 形式への変換では、段落の中の改行の前後がどちらも全角文字なら、空白を入れずにつなげる。
+
+**エラー**
+
+- 失敗時の終了コードは 1。`--format json` のコマンドでは、標準エラーに `{"error":{"kind":...,"status":...,"message":...,"hint":...}}` を出す。
+- `kind` は `auth`・`forbidden`・`not_found`・`conflict`・`validation`・`rate_limit`・`read_only`・`version_mismatch`・`lossy`・`comment_loss`・`verify_failed`・`api` のいずれか。
+- `verify_failed` は、書き込みは完了したが、書き込み後に読み戻した本文の確認で失敗したことを表す。ページは作成・更新されているため、`page create` をやり直すと同じページが 2 つできる。やり直さずに、出力されたページを確認する。
+
+**コマンドと設定**
+
+- `label add <page> <label>...`、`label remove <page> <label>`、`page children <page>`、`page ancestors <page>`、`page versions <page>` がある。
+- 設定に次の項目がある。
+  - `read_only`（環境変数 `CONFLUENCE_READ_ONLY`）: 書き込み系のコマンドを API を呼ばずに拒否する（kind は `read_only`）。`--dry-run` は拒否しない。
+  - `writable_spaces`: 書き込みを許可するスペースキーの一覧。
+  - `api_token_command`: API トークンを標準出力に出すコマンドと引数の配列。
+
 ## 非ゴール
 
 - 添付ファイルのアップロード・ダウンロード、コメント、ブログ投稿、フォルダの操作。
-- `~/.claude/skills/confluence-cli` スキルの修正（利用者が別途行う）。改修後の CLI は、古い出力形式との互換を残さなくてよい。
+- `~/.claude/skills/confluence-cli` スキルの修正（利用者が別途行う。合わせる変更点は「confluence-cli スキルの修正で合わせる変更点」の節にまとめた）。改修後の CLI は、古い出力形式との互換を残さなくてよい。
 - Markdown を経由した取得から更新までの完全な往復（変換規則のないマクロは失われる。既存ページの編集は部分更新か storage 形式で行う）。
 - OAuth 3LO とサービスアカウントの Bearer 認証。
 - GitHub Releases でのバイナリ配布の整備。
