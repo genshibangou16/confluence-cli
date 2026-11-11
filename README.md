@@ -121,7 +121,7 @@ confluence-cli search --help-cql                             # CQL の書き方
 
 主なフラグ: `--space-key`、`--label`（複数指定は AND）、`--author`（accountId。`me` で自分）、`--since`（`30d`、`2w`、`2026-01-01`）、`--type`、`--sort relevance|modified`、`--limit`、`--all`、`--format table|json`。
 
-`--title` は CQL の `title ~` で検索する。Confluence はタイトルを語に分けて照合するため、タイトルの一部を連ねた語（`20250101_ABC週次MTG` に対する `ABC週次MTG` など）では一致しないことがある。結果が 0 件なら、語を短くするか区切って検索し直すよう警告を出す。
+`--title` は CQL の `title ~` で検索する。Confluence はタイトルを語に分けて照合するため、タイトルに含まれる文字列でも一致しないことがある。たとえば `20250101_ABC週次MTG` というタイトルに対して、`ABC週次MTG` と `ABC週次` では一致せず、`週次MTG` では一致する。結果が 0 件なら、別の語にするか `--title` を外して検索し直すよう警告を出す。
 
 ### page
 

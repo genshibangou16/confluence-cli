@@ -79,13 +79,13 @@ func TestSearch_DecodesEscapedSurrogatePairsInExcerpt(t *testing.T) {
 
 func TestDecodeEscapedSurrogatePairs(t *testing.T) {
 	cases := map[string]struct{ in, want string }{
-		"組":          {`🗓`, "🗓"},
-		"連続した 2 組":   {`🗓👥 a`, "🗓👥 a"},
-		"小文字の 16 進数": {`🗣`, "\U0001F5E3"},
+		"組":          {`\uD83D\uDDD3`, "\U0001F5D3"},
+		"連続した 2 組":   {`\uD83D\uDDD3\uD83D\uDC65 a`, "\U0001F5D3\U0001F465 a"},
+		"小文字の 16 進数": {`\ud83d\udde3`, "\U0001F5E3"},
 		"上位だけ":       {`\uD83D a`, `\uD83D a`},
 		"下位だけ":       {`a \uDDD3`, `a \uDDD3`},
 		"下位と上位の順":    {`\uDDD3\uD83D`, `\uDDD3\uD83D`},
-		"サロゲート以外":    {`Aあ`, `Aあ`},
+		"サロゲート以外":    {`\u0041\u3042`, `\u0041\u3042`},
 		"4 桁に満たない":   {`\uD83D\uDDD`, `\uD83D\uDDD`},
 		"エスケープなし":    {"日付 🗓", "日付 🗓"},
 	}

@@ -1,6 +1,6 @@
 # search の --title の説明と抜粋の絵文字の修正 実装計画
 
-**Goal:** `search --title` の説明を実際の一致の仕方に合わせ、0 件のときに検索し直す方法を警告で示す。検索結果の抜粋に `🗓` のような文字列で入る絵文字を、元の文字に戻す。
+**Goal:** `search --title` の説明を実際の一致の仕方に合わせ、0 件のときに検索し直す方法を警告で示す。検索結果の抜粋に `\uD83D\uDDD3` のような文字列で入る絵文字を、元の文字に戻す。
 
 **Architecture:** 説明の修正は `internal/cli/search.go`・README・設計書。0 件の警告は、検索の警告を組み立てている `internal/usecase/search.go` に足す。抜粋の文字列の復元は、API の応答の表現に依存する処理なので、検索 API の応答を読む `internal/adapter/confluence/search.go` に置く。
 
@@ -24,7 +24,7 @@
 
 ### 抜粋の絵文字は API が文字列で返している
 
-検索 API（`GET /wiki/rest/api/search`）の応答の `excerpt` に、絵文字が `🗓` という 12 文字の文字列（JSON では `"\\uD83D\\uDDD3"`）で入っている。`excerpt=highlight` と `excerpt=highlight_unescaped` のどちらでも同じ。CLI の変換ではなく、API の応答の時点でこの形になっている。
+検索 API（`GET /wiki/rest/api/search`）の応答の `excerpt` に、絵文字が `\uD83D\uDDD3` という 12 文字の文字列（JSON では `"\\uD83D\\uDDD3"`）で入っている。`excerpt=highlight` と `excerpt=highlight_unescaped` のどちらでも同じ。CLI の変換ではなく、API の応答の時点でこの形になっている。
 
 1,000 件の検索結果を調べた範囲では、次のとおりだった。
 
@@ -48,7 +48,7 @@
 - [ ] `TestSearch_TitleNoHitsWarns` を書く。`Mode: cql.ModeTitle` で検索 API が 0 件を返すと、warnings に 1 件入る。
 - [ ] `TestSearch_TitleHitsNoWarning` を書く。`ModeTitle` で 1 件以上なら warnings は空。`RawCQL` を指定した検索と、`ModeSite`・`ModeText` で 0 件のときも warnings は空。
 - [ ] 失敗を確かめる: `go test ./internal/usecase -run TestSearch_Title`
-- [ ] `SearchService.Search` のタイトル検索の分岐で、0 件なら警告を返す。文言: `--title はタイトルを語に分けて照合するため、タイトルの一部を連ねた語では一致しないことがあります。語を短くするか、区切って検索し直してください`
+- [ ] `SearchService.Search` のタイトル検索の分岐で、0 件なら警告を返す。文言: `--title の検索は 0 件でした。--title はタイトルを語に分けて照合するため、タイトルに含まれる文字列でも一致しないことがあります。別の語にするか、--title を外して検索し直してください`
 - [ ] テストが通ることを確かめる。
 - [ ] `--help` の説明を「タイトルの語の一致」にする。README の例のコメントと設計書の 3 か所（82・114・250 行目）も直す。
 - [ ] コミットする。
@@ -61,12 +61,12 @@
 
 - [ ] `TestSearch_DecodesEscapedSurrogatePairsInExcerpt` を書く。応答の excerpt が `\\uD83D\\uDDD3 日付` のとき、`Excerpt` が `🗓 日付` になる。
 - [ ] `TestDecodeEscapedSurrogatePairs` をテーブルテストで書く。
-  - `🗓` → `🗓`
+  - `\uD83D\uDDD3` → `🗓`
   - 連続した 2 組 → 2 文字
   - 上位だけ（`\uD83D` の後に文字）→ 変えない
   - 下位だけ → 変えない
-  - サロゲート以外（`A`）→ 変えない
-  - 小文字の 16 進数（`🗣`）→ 文字に戻す
+  - サロゲート以外（`\u0041`）→ 変えない
+  - 小文字の 16 進数（`\ud83d\udde3`）→ 文字に戻す
   - 16 進数が 4 桁に満たない → 変えない
 - [ ] 失敗を確かめる: `go test ./internal/adapter/confluence -run 'Surrogate'`
 - [ ] `decodeEscapedSurrogatePairs(s string) string` を実装し、`Search` で `highlightMarkers.Replace` の後の excerpt に適用する。正規表現 `\\u([dD][89abAB][0-9a-fA-F]{2})\\u([dD][c-fC-F][0-9a-fA-F]{2})` で組を探し、`utf16.DecodeRune` で 1 文字にする。

@@ -50,7 +50,7 @@ var highlightMarkers = strings.NewReplacer("@@@hl@@@", "", "@@@endhl@@@", "")
 var escapedSurrogatePair = regexp.MustCompile(`\\u([dD][89abAB][0-9a-fA-F]{2})\\u([dD][c-fC-F][0-9a-fA-F]{2})`)
 
 // decodeEscapedSurrogatePairs は、s の中の \uXXXX\uXXXX の文字列のうち、サロゲートペアになる組を 1 文字に戻す。
-// 検索 API は excerpt の中の絵文字などを、文字ではなく \uD83D\uDDD3 のような文字列で返すため。
+// 検索 API が excerpt の中の絵文字などを、文字ではなく \uD83D\uDDD3 のような文字列で返すので、組を文字に戻して表示できるようにする。
 // 組にならない \uXXXX とサロゲート以外の \uXXXX は、本文にその文字列が書かれている場合があるため変えない。
 func decodeEscapedSurrogatePairs(s string) string {
 	if !strings.Contains(s, `\u`) {

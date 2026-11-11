@@ -17,9 +17,9 @@ func NewSearchService(s Searcher, p PagesByIDGetter) *SearchService {
 }
 
 // titleNoHitsWarning は、タイトル検索の結果が 0 件のときの警告。
-// title ~ はタイトルを語に分けて照合し、ワイルドカードを付けても語の途中からは一致しないため、
-// 検索語の側を変えるよう利用者に伝える。
-const titleNoHitsWarning = "--title はタイトルを語に分けて照合するため、タイトルの一部を連ねた語では一致しないことがあります。語を短くするか、区切って検索し直してください"
+// title ~ はタイトルを語に分けて照合するため、タイトルに含まれる文字列でも一致しないことがある。
+// ワイルドカードを付けても一致しないため、検索語か検索方法を変えるよう利用者に伝える。
+const titleNoHitsWarning = "--title の検索は 0 件でした。--title はタイトルを語に分けて照合するため、タイトルに含まれる文字列でも一致しないことがあります。別の語にするか、--title を外して検索し直してください"
 
 // Search は f から CQL を組み立てて検索する。
 // siteSearch はサイトの設定によって 400 で拒否されることがあるため、検索語での siteSearch が
