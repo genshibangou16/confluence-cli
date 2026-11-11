@@ -127,9 +127,12 @@ func TestE2E_MarkdownPartialUpdate(t *testing.T) {
 		e.mustWrite(t, id, "page", "update", "--append", "--input-format", "markdown", "--body", appendMD)
 		appended := e.storage(t, id)
 		if !strings.HasPrefix(appended, baseline) {
-			t.Errorf("Markdown の --append: 既存の本文がベースラインと一致しない")
+			assertSame(t, "Markdown の --append の既存部分", baseline, appended)
+		} else {
+			// Confluence は新しく挿入されたマクロに ac:macro-id を付けるため、挿入した部分でだけ ac:macro-id 属性を除いて比べる。
+			inserted := macroIDRe.ReplaceAllString(appended[len(baseline):], "")
+			assertSame(t, "Markdown の --append の追記部分", wantAppend, inserted)
 		}
-		assertSame(t, "Markdown の --append", baseline+wantAppend, appended)
 		reportTaskIDs(t, appended)
 
 		// レイアウトのないページでは、追記した h2 が「まとめ」の節の終わりになる。
@@ -138,6 +141,8 @@ func TestE2E_MarkdownPartialUpdate(t *testing.T) {
 		assertSame(t, "Markdown の --section", appended[:start]+wantSection+appended[end:], e.storage(t, id))
 	})
 }
+
+var macroIDRe = regexp.MustCompile(` ac:macro-id="[^"]*"`)
 
 var taskIDRe = regexp.MustCompile(`<ac:task-id>([^<]*)</ac:task-id>`)
 
