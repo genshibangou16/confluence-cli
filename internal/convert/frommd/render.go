@@ -62,8 +62,8 @@ func (r *renderer) block(n ast.Node) {
 		r.write("</", tag, ">\n")
 	case *ast.Paragraph:
 		if r.lineText(n, 0) == "[TOC]" && n.Lines().Len() == 1 {
-			r.write(`<ac:structured-macro ac:name="toc" ac:schema-version="1">`+"\n",
-				`<ac:parameter ac:name="maxLevel">3</ac:parameter>`+"\n", "</ac:structured-macro>\n")
+			r.write(`<ac:structured-macro ac:name="toc" ac:schema-version="1">`,
+				`<ac:parameter ac:name="maxLevel">3</ac:parameter>`, "</ac:structured-macro>\n")
 			return
 		}
 		r.paragraph(n.FirstChild())
@@ -115,12 +115,13 @@ func (r *renderer) code(n ast.Node, lang string) {
 		b.Write(seg.Value(r.src))
 	}
 	body := strings.TrimSuffix(b.String(), "\n")
-	r.write(`<ac:structured-macro ac:name="code" ac:schema-version="1">` + "\n")
+	// マクロの子要素の間には空白を入れない。Confluence は保存時にこの空白を削除するため、入れると読み戻した本文が送った本文と一致しない。
+	r.write(`<ac:structured-macro ac:name="code" ac:schema-version="1">`)
 	if lang != "" {
-		r.write(`<ac:parameter ac:name="language">`, lang, "</ac:parameter>\n")
+		r.write(`<ac:parameter ac:name="language">`, lang, "</ac:parameter>")
 	}
 	// CDATA は "]]>" で終わるため、本文の "]]>" は "]]" と ">" を別の CDATA に分けて書く。
-	r.write("<ac:plain-text-body><![CDATA[", strings.ReplaceAll(body, "]]>", "]]]]><![CDATA[>"), "]]></ac:plain-text-body>\n", "</ac:structured-macro>\n")
+	r.write("<ac:plain-text-body><![CDATA[", strings.ReplaceAll(body, "]]>", "]]]]><![CDATA[>"), "]]></ac:plain-text-body>", "</ac:structured-macro>\n")
 }
 
 // blockquote は GitHub Alerts をパネルマクロにし、それ以外の引用を blockquote にする。
@@ -139,7 +140,8 @@ func (r *renderer) blockquote(n *ast.Blockquote) {
 		r.write("</blockquote>\n")
 		return
 	}
-	r.write(`<ac:structured-macro ac:name="`, panel, `" ac:schema-version="1">`+"\n", "<ac:rich-text-body>\n")
+	// code マクロと同じく、マクロの子要素の間には空白を入れない。ac:rich-text-body の中の空白は Confluence がそのまま残す。
+	r.write(`<ac:structured-macro ac:name="`, panel, `" ac:schema-version="1">`, "<ac:rich-text-body>\n")
 	// 1 行目の "[!TYPE]" はテキストのノードとして解析されるため、1 行目に収まるテキストのノードを除いて書く。
 	end := p.Lines().At(0).Stop
 	first := p.FirstChild()
@@ -154,7 +156,7 @@ func (r *renderer) blockquote(n *ast.Blockquote) {
 	for c := p.NextSibling(); c != nil; c = c.NextSibling() {
 		r.block(c)
 	}
-	r.write("</ac:rich-text-body>\n", "</ac:structured-macro>\n")
+	r.write("</ac:rich-text-body>", "</ac:structured-macro>\n")
 }
 
 // taskCheckBox は項目 li の最初のブロックの先頭にあるチェックボックスを返す。なければ nil を返す。

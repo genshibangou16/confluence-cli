@@ -67,7 +67,7 @@ func TestConvert_OutputIsWellFormed(t *testing.T) {
 func TestConvert_AlertMapping(t *testing.T) {
 	for kind, macro := range map[string]string{"NOTE": "info", "IMPORTANT": "info", "TIP": "tip", "WARNING": "note", "CAUTION": "warning"} {
 		got := mustConvert(t, "> [!"+kind+"]\n> 本文\n")
-		want := `<ac:structured-macro ac:name="` + macro + `" ac:schema-version="1">` + "\n<ac:rich-text-body>\n<p>本文</p>\n</ac:rich-text-body>\n</ac:structured-macro>\n"
+		want := `<ac:structured-macro ac:name="` + macro + `" ac:schema-version="1">` + "<ac:rich-text-body>\n<p>本文</p>\n</ac:rich-text-body></ac:structured-macro>\n"
 		if got != want {
 			t.Errorf("%s: got %q, want %q", kind, got, want)
 		}
@@ -156,7 +156,7 @@ func TestConvert_EscapesText(t *testing.T) {
 
 func TestConvert_DropsCharsInvalidInXML(t *testing.T) {
 	got := mustConvert(t, "a\x01b &#1; c\x00d\n\n```\nx\x02y\n```\n")
-	want := "<p>ab  cd</p>\n" + `<ac:structured-macro ac:name="code" ac:schema-version="1">` + "\n<ac:plain-text-body><![CDATA[xy]]></ac:plain-text-body>\n</ac:structured-macro>\n"
+	want := "<p>ab  cd</p>\n" + `<ac:structured-macro ac:name="code" ac:schema-version="1">` + "<ac:plain-text-body><![CDATA[xy]]></ac:plain-text-body></ac:structured-macro>\n"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -207,8 +207,8 @@ func TestConvert_SoftLineBreak(t *testing.T) {
 
 func TestConvert_CRLF(t *testing.T) {
 	got := mustConvert(t, "```go\r\nx\r\ny\r\n```\r\n\r\npara\r\nnext\r\n")
-	want := `<ac:structured-macro ac:name="code" ac:schema-version="1">` + "\n" + `<ac:parameter ac:name="language">go</ac:parameter>` +
-		"\n<ac:plain-text-body><![CDATA[x\ny]]></ac:plain-text-body>\n</ac:structured-macro>\n<p>para next</p>\n"
+	want := `<ac:structured-macro ac:name="code" ac:schema-version="1">` + `<ac:parameter ac:name="language">go</ac:parameter>` +
+		"<ac:plain-text-body><![CDATA[x\ny]]></ac:plain-text-body></ac:structured-macro>\n<p>para next</p>\n"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -226,5 +226,12 @@ func TestConvert_OrderedListStart(t *testing.T) {
 func TestConvert_Empty(t *testing.T) {
 	if got := mustConvert(t, ""); got != "" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestConvert_TOC(t *testing.T) {
+	want := `<ac:structured-macro ac:name="toc" ac:schema-version="1"><ac:parameter ac:name="maxLevel">3</ac:parameter></ac:structured-macro>` + "\n"
+	if got := mustConvert(t, "[TOC]\n"); got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
