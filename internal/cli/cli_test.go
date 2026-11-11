@@ -234,6 +234,7 @@ func TestPageGet_InvalidCombinations(t *testing.T) {
 		{"--format", "storage", "--content-format", "storage"},
 		{"--format", "json", "--content-format", "html"},
 		{"--section", "none"},
+		{"--section", ""},
 	} {
 		e := headingEnv(t)
 		if code := e.run(append([]string{"page", "get", "1234567890"}, args...)...); code != 1 {
@@ -245,12 +246,42 @@ func TestPageGet_InvalidCombinations(t *testing.T) {
 	}
 }
 
+func TestPageGet_OutlineJSONEmptyBody(t *testing.T) {
+	empty := `{"id":"1234567890","title":"T","status":"current","spaceId":"10","version":{"number":7},"body":{"storage":{"value":""}}}`
+	e := newEnv(t, map[string]http.HandlerFunc{"/wiki/api/v2/pages/1234567890": reply(empty)})
+	if code := e.run("page", "get", "1234567890", "--format", "json", "--outline"); code != 0 {
+		t.Fatalf("code = %d, stderr = %s", code, e.stderr)
+	}
+	if !strings.Contains(e.stdout.String(), `"outline":[]`) || strings.Contains(e.stdout.String(), `"content"`) {
+		t.Fatalf("stdout = %q", e.stdout)
+	}
+	e = newEnv(t, map[string]http.HandlerFunc{"/wiki/api/v2/pages/1234567890": reply(empty)})
+	if code := e.run("page", "get", "1234567890", "--format", "json"); code != 0 || strings.Contains(e.stdout.String(), `"outline"`) {
+		t.Fatalf("code = %d, stdout = %q", code, e.stdout)
+	}
+}
+
+func TestPageGet_MarkdownBodySanitized(t *testing.T) {
+	body := `{"id":"1","title":"T","status":"current","spaceId":"10","version":{"number":1},"body":{"storage":{"value":"<h1>A</h1><p>x\u009b31mred</p><p>y</p>"}}}`
+	e := newEnv(t, map[string]http.HandlerFunc{"/wiki/api/v2/pages/1": reply(body)})
+	for _, args := range [][]string{{"page", "get", "1"}, {"page", "get", "1", "--section", "A"}} {
+		e.stdout.Reset()
+		if code := e.run(args...); code != 0 {
+			t.Fatalf("code = %d, stderr = %s", code, e.stderr)
+		}
+		out := e.stdout.String()
+		if strings.Contains(out, "\u009b") || !strings.Contains(out, "x 31mred\n\ny\n") {
+			t.Fatalf("%v: stdout = %q", args, out)
+		}
+	}
+}
+
 func TestPageGet_JSON(t *testing.T) {
 	type out struct {
 		ID, Title, Status, SpaceID, URL string
-		Version                        int
-		Content                        *string
-		Outline                        []struct {
+		Version                         int
+		Content                         *string
+		Outline                         []struct {
 			Level int
 			Text  string
 		}

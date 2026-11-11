@@ -35,14 +35,14 @@ type outlineJSON struct {
 }
 
 type pageGetJSON struct {
-	ID      string        `json:"id"`
-	Title   string        `json:"title"`
-	Status  string        `json:"status"`
-	SpaceID string        `json:"spaceId"`
-	Version int           `json:"version"`
-	URL     string        `json:"url"`
-	Content *string       `json:"content,omitempty"`
-	Outline []outlineJSON `json:"outline,omitempty"`
+	ID      string         `json:"id"`
+	Title   string         `json:"title"`
+	Status  string         `json:"status"`
+	SpaceID string         `json:"spaceId"`
+	Version int            `json:"version"`
+	URL     string         `json:"url"`
+	Content *string        `json:"content,omitempty"`
+	Outline *[]outlineJSON `json:"outline,omitempty"`
 }
 
 func newPageGetCmd(d Deps) *cobra.Command {
@@ -97,10 +97,11 @@ func newPageGetCmd(d Deps) *cobra.Command {
 					Version: p.Version.Number, URL: p.WebURL,
 				}
 				if outline {
-					out.Outline = make([]outlineJSON, 0, len(v.Outline))
+					items := make([]outlineJSON, 0, len(v.Outline))
 					for _, o := range v.Outline {
-						out.Outline = append(out.Outline, outlineJSON{Level: o.Level, Text: output.SanitizeText(o.Text)})
+						items = append(items, outlineJSON{Level: o.Level, Text: output.SanitizeText(o.Text)})
 					}
+					out.Outline = &items
 				} else {
 					out.Content = &v.Content
 				}
@@ -120,7 +121,7 @@ func newPageGetCmd(d Deps) *cobra.Command {
 				}
 				return nil
 			}
-			_, err = io.WriteString(d.Stdout, "---\n"+v.Content)
+			_, err = io.WriteString(d.Stdout, "---\n"+output.SanitizeMultiline(v.Content))
 			return err
 		},
 	}

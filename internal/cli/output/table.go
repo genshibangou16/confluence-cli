@@ -14,9 +14,16 @@ import (
 // SanitizeText は Confluence 由来の文字列を端末へ出力する前に、端末の制御に使える文字を除く。
 // ESC や C1 を含む制御文字（改行・タブも含む）は空白に置き換え、表示順を変える
 // 双方向制御文字は取り除く。
-func SanitizeText(s string) string {
+func SanitizeText(s string) string { return sanitize(s, false) }
+
+// SanitizeMultiline は SanitizeText と同じだが、改行とタブはそのまま残す。複数行の本文を出力するときに使う。
+func SanitizeMultiline(s string) string { return sanitize(s, true) }
+
+func sanitize(s string, keepLayout bool) string {
 	return strings.Map(func(r rune) rune {
 		switch {
+		case keepLayout && (r == '\n' || r == '\t'):
+			return r
 		case unicode.IsControl(r):
 			return ' '
 		case r == 0x061C, r == 0x200E, r == 0x200F,

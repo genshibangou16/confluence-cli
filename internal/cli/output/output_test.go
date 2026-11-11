@@ -128,3 +128,10 @@ func TestWriteError_TextSanitizesControlChars(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestSanitizeMultiline(t *testing.T) {
+	got := SanitizeMultiline("a\x1b[31mb\n\tc\u202ed\u0085e")
+	if got != "a [31mb\n\tcd e" {
+		t.Fatalf("got %q", got)
+	}
+}

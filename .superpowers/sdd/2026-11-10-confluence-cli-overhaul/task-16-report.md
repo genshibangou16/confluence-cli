@@ -16,3 +16,9 @@ RED/GREEN を分けて記録できていない: usecase のテストと実装を
 
 ## ファイル
 internal/usecase/page_query.go, page_query_test.go, internal/cli/page_get.go, cli_test.go
+
+## Fix round 1
+- outline: `Outline *[]outlineJSON`（omitempty）にし、--outline の json は空でも `"outline":[]` を出す。空本文のテスト TestPageGet_OutlineJSONEmptyBody を追加（--outline なしでは outline キーなしも確認）。
+- sanitize: output.SanitizeMultiline を追加（改行とタブを残し、他は SanitizeText と同じ）。markdown 本文と --section の markdown に適用。outline 行は SanitizeText 済み。storage はバイト一致のまま。テスト: TestSanitizeMultiline、TestPageGet_MarkdownBodySanitized（C1 の U+009B を本文に入れる。ESC は XML 1.0 で不正なため storage に置けない）。
+- TestPageGet_InvalidCombinations に `--section ""` を追加。
+- 実行: `go vet ./... && go test ./...` -> 全パッケージ ok（cli 0.401s, output 0.234s）。変更は internal/cli と internal/cli/output のみ。
