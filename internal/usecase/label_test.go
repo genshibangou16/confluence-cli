@@ -42,3 +42,83 @@ func TestLabelQuery_PassesArguments(t *testing.T) {
 		t.Fatalf("Pages: %+v, %v, %v", ps, err, r.got)
 	}
 }
+
+type fakeLabelWriter struct {
+	added   []string
+	removed []string
+	calls   int
+}
+
+func (f *fakeLabelWriter) AddLabels(_ context.Context, _ domain.PageID, names []string) error {
+	f.calls++
+	f.added = names
+	return nil
+}
+
+func (f *fakeLabelWriter) RemoveLabel(_ context.Context, _ domain.PageID, name string) error {
+	f.calls++
+	f.removed = append(f.removed, name)
+	return nil
+}
+
+func newLabelCommand(policy WritePolicy) (*LabelCommand, *fakeWriteGetter, *fakeLabelWriter) {
+	g := &fakeWriteGetter{pages: map[domain.PageID]domain.Page{"10": {ID: "10", SpaceID: "100"}, "20": {ID: "20", SpaceID: "200"}}}
+	w := &fakeLabelWriter{}
+	return NewLabelCommand(g, w, NewWriteGuard(policy, newSpaces())), g, w
+}
+
+func TestLabelCommand_AddRemove(t *testing.T) {
+	c, _, w := newLabelCommand(WritePolicy{WritableSpaces: []string{"DOC"}})
+	ctx := context.Background()
+	if err := c.Add(ctx, "10", []string{"a", "b"}); err != nil || !reflect.DeepEqual(w.added, []string{"a", "b"}) {
+		t.Fatalf("Add: %v, %v", err, w.added)
+	}
+	if err := c.Remove(ctx, "10", "a"); err != nil || !reflect.DeepEqual(w.removed, []string{"a"}) {
+		t.Fatalf("Remove: %v, %v", err, w.removed)
+	}
+}
+
+func TestLabelCommand_ReadOnlyNoAPICall(t *testing.T) {
+	c, g, w := newLabelCommand(WritePolicy{ReadOnly: true})
+	ctx := context.Background()
+	if err := c.Add(ctx, "10", []string{"a"}); domain.KindOf(err) != domain.ErrReadOnly {
+		t.Fatalf("Add: %v", err)
+	}
+	if err := c.Remove(ctx, "10", "a"); domain.KindOf(err) != domain.ErrReadOnly {
+		t.Fatalf("Remove: %v", err)
+	}
+	if len(g.calls) != 0 || w.calls != 0 {
+		t.Fatalf("API called: get %v, write %d", g.calls, w.calls)
+	}
+}
+
+func TestLabelCommand_DisallowedSpace(t *testing.T) {
+	c, _, w := newLabelCommand(WritePolicy{WritableSpaces: []string{"DOC"}})
+	ctx := context.Background()
+	if err := c.Add(ctx, "20", []string{"a"}); domain.KindOf(err) != domain.ErrReadOnly {
+		t.Fatalf("Add: %v", err)
+	}
+	if err := c.Remove(ctx, "20", "a"); domain.KindOf(err) != domain.ErrReadOnly {
+		t.Fatalf("Remove: %v", err)
+	}
+	if w.calls != 0 {
+		t.Fatalf("writer called %d times", w.calls)
+	}
+}
+
+func TestLabelCommand_Validation(t *testing.T) {
+	c, g, w := newLabelCommand(WritePolicy{})
+	ctx := context.Background()
+	if err := c.Add(ctx, "10", nil); domain.KindOf(err) != domain.ErrValidation {
+		t.Fatalf("Add no names: %v", err)
+	}
+	if err := c.Add(ctx, "10", []string{"a", " "}); domain.KindOf(err) != domain.ErrValidation {
+		t.Fatalf("Add blank name: %v", err)
+	}
+	if err := c.Remove(ctx, "10", ""); domain.KindOf(err) != domain.ErrValidation {
+		t.Fatalf("Remove blank: %v", err)
+	}
+	if len(g.calls) != 0 || w.calls != 0 {
+		t.Fatalf("API called: get %v, write %d", g.calls, w.calls)
+	}
+}

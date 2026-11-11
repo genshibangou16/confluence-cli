@@ -188,3 +188,35 @@ func TestCreate_ReadBackFailure(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestDelete_GuardChecked(t *testing.T) {
+	c, _, w := newCommand(WritePolicy{WritableSpaces: []string{"OTHER"}})
+	if err := c.Delete(context.Background(), "10"); domain.KindOf(err) != domain.ErrReadOnly {
+		t.Fatalf("err = %v", err)
+	}
+	if w.deletes != 0 {
+		t.Fatalf("DeletePage called %d times", w.deletes)
+	}
+
+	c, _, w = newCommand(WritePolicy{WritableSpaces: []string{"DOC"}})
+	if err := c.Delete(context.Background(), "10"); err != nil || w.deletes != 1 {
+		t.Fatalf("err = %v, deletes = %d", err, w.deletes)
+	}
+}
+
+func TestDelete_ReadOnlyNoAPICall(t *testing.T) {
+	c, g, w := newCommand(WritePolicy{ReadOnly: true})
+	if err := c.Delete(context.Background(), "10"); domain.KindOf(err) != domain.ErrReadOnly {
+		t.Fatalf("err = %v", err)
+	}
+	if len(g.calls) != 0 || w.deletes != 0 {
+		t.Fatalf("API called: get %v, deletes %d", g.calls, w.deletes)
+	}
+}
+
+func TestDelete_NotFound(t *testing.T) {
+	c, _, w := newCommand(WritePolicy{})
+	if err := c.Delete(context.Background(), "404"); domain.KindOf(err) != domain.ErrNotFound || w.deletes != 0 {
+		t.Fatalf("err = %v, deletes = %d", err, w.deletes)
+	}
+}

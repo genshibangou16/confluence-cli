@@ -62,7 +62,7 @@ func (c *PageCommand) Create(ctx context.Context, r CreateRequest) (WriteResult,
 	if err != nil {
 		return WriteResult{}, err
 	}
-	if err := c.guard.checkReadOnly(); err != nil {
+	if err := c.guard.CheckReadOnly(); err != nil {
 		return WriteResult{}, err
 	}
 	spaceID := r.SpaceID
@@ -170,7 +170,7 @@ func (c *PageCommand) Update(ctx context.Context, r UpdateRequest) (WriteResult,
 	if err := validateUpdate(r); err != nil {
 		return WriteResult{}, err
 	}
-	if err := c.guard.checkReadOnly(); err != nil {
+	if err := c.guard.CheckReadOnly(); err != nil {
 		return WriteResult{}, err
 	}
 	cur, err := c.g.GetPage(ctx, r.ID, true, 0)
@@ -311,4 +311,12 @@ func newBody(cur string, r UpdateRequest) (body, replaced string, err error) {
 	default:
 		return in, cur, nil
 	}
+}
+
+// Delete はページを削除する。書き込みの許可はページのあるスペースで確認する。
+func (c *PageCommand) Delete(ctx context.Context, id domain.PageID) error {
+	if err := c.guard.checkPage(ctx, c.g, id); err != nil {
+		return err
+	}
+	return c.w.DeletePage(ctx, id)
 }

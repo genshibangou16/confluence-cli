@@ -27,10 +27,10 @@ func NewWriteGuard(p WritePolicy, spaces SpaceIDFinder) *WriteGuard {
 
 // Check は spaceID のスペースへの書き込みが許可されていなければ ErrReadOnly を返す。
 // 設定はスペースキーで書かれ、ページはスペース ID しか持たないため、WritableSpaces があるときだけ API でキーを引く。
-// read_only の判定は API を呼ばずにできるため、checkReadOnly に分けてある。
-// 対象のスペースを知るために親ページなどを取得するユースケースは、その取得より前に checkReadOnly を呼ぶ。
+// read_only の判定は API を呼ばずにできるため、CheckReadOnly に分けてある。
+// 対象のスペースを知るために親ページやスペースを取得する処理は、その取得より前に CheckReadOnly を呼ぶ。
 func (g *WriteGuard) Check(ctx context.Context, spaceID string) error {
-	if err := g.checkReadOnly(); err != nil {
+	if err := g.CheckReadOnly(); err != nil {
 		return err
 	}
 	if g.p.WritableSpaces == nil {
@@ -51,9 +51,21 @@ func (g *WriteGuard) Check(ctx context.Context, spaceID string) error {
 	}
 }
 
-func (g *WriteGuard) checkReadOnly() error {
+func (g *WriteGuard) CheckReadOnly() error {
 	if g.p.ReadOnly {
 		return &domain.Error{Kind: domain.ErrReadOnly, Message: "read_only の設定により書き込みは許可されていません"}
 	}
 	return nil
+}
+
+// checkPage は既存のページ id への書き込みが許可されているかを、ページを取得してそのスペースで確認する。
+func (g *WriteGuard) checkPage(ctx context.Context, pages PageGetter, id domain.PageID) error {
+	if err := g.CheckReadOnly(); err != nil {
+		return err
+	}
+	p, err := pages.GetPage(ctx, id, false, 0)
+	if err != nil {
+		return err
+	}
+	return g.Check(ctx, p.SpaceID)
 }

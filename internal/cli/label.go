@@ -15,9 +15,9 @@ type labelJSON struct {
 func newLabelCmd(d Deps) *cobra.Command {
 	c := &cobra.Command{
 		Use:   "label",
-		Short: "ラベルと、ラベルの付いたページを一覧する",
+		Short: "ラベルと、ラベルの付いたページを一覧し、ページのラベルを付け外しする",
 	}
-	c.AddCommand(newLabelListCmd(d), newLabelPagesCmd(d))
+	c.AddCommand(newLabelListCmd(d), newLabelPagesCmd(d), newLabelAddCmd(d), newLabelRemoveCmd(d))
 	return c
 }
 

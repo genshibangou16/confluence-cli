@@ -16,6 +16,9 @@ type App struct {
 	Pages    *usecase.PageQuery
 	Tree     *usecase.PageTree
 	Labels   *usecase.LabelQuery
+	Commands *usecase.PageCommand
+	LabelCmd *usecase.LabelCommand
+	Guard    *usecase.WriteGuard
 	Settings config.Settings
 }
 
@@ -35,12 +38,16 @@ func buildApp(ctx context.Context, d Deps) (*App, error) {
 		fmt.Fprintln(d.Stderr, "Warning: "+warn)
 	}
 	c := confluence.New(confluence.Options{Root: root, Email: s.Email, Token: s.APIToken, HTTP: d.HTTP})
+	guard := usecase.NewWriteGuard(usecase.WritePolicy{ReadOnly: s.ReadOnly, WritableSpaces: s.WritableSpaces}, c)
 	return &App{
 		Search:   usecase.NewSearchService(c),
 		Spaces:   usecase.NewSpaceService(c),
 		Pages:    usecase.NewPageQuery(c),
 		Tree:     usecase.NewPageTree(c),
 		Labels:   usecase.NewLabelQuery(c),
+		Commands: usecase.NewPageCommand(c, c, guard),
+		LabelCmd: usecase.NewLabelCommand(c, c, guard),
+		Guard:    guard,
 		Settings: s,
 	}, nil
 }

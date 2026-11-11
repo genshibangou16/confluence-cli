@@ -43,3 +43,8 @@ type PageWriter interface {
 type SpaceIDFinder interface {
 	SpaceByID(ctx context.Context, id string) (domain.Space, error)
 }
+
+type LabelWriter interface {
+	AddLabels(ctx context.Context, id domain.PageID, names []string) error
+	RemoveLabel(ctx context.Context, id domain.PageID, name string) error
+}
