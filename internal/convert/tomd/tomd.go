@@ -50,7 +50,7 @@ func Convert(body string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	out := joinBlocks(renderBlocks(root.children), "\n\n")
+	out := strings.Join(renderBlocks(root.children), "\n\n")
 	if out == "" {
 		return "", nil
 	}
@@ -109,7 +109,7 @@ func (n *node) isRI(local string) bool {
 	return !n.isText && n.name.Space == riNS && n.name.Local == local
 }
 
-// attr は名前空間を問わずローカル名で属性を探す。storage 形式では同じ属性が ac: 付きと無しの両方で現れるため。
+// attrValue は名前空間を問わずローカル名で属性を探す。storage 形式では同じ属性が ac: 付きと無しの両方で現れるため。
 func (n *node) attrValue(local string) string {
 	for _, a := range n.attr {
 		if a.Name.Local == local {
@@ -239,8 +239,6 @@ func blank(run []*node) bool {
 	return true
 }
 
-func joinBlocks(bs []string, sep string) string { return strings.Join(bs, sep) }
-
 func block(n *node) []string {
 	if n.name.Space == acNS {
 		switch n.name.Local {
@@ -267,7 +265,7 @@ func block(n *node) []string {
 	case "table":
 		return []string{table(n)}
 	case "blockquote":
-		return []string{quote(joinBlocks(renderBlocks(n.children), "\n\n"))}
+		return []string{quote(strings.Join(renderBlocks(n.children), "\n\n"))}
 	case "pre":
 		return []string{fence("", n.rawText())}
 	case "hr":
@@ -279,12 +277,13 @@ func block(n *node) []string {
 }
 
 var (
-	blockMarkup   = regexp.MustCompile(`^(#{1,6}( |$)|>|[-*+]( |$))`)
+	blockMarkup   = regexp.MustCompile("^(#{1,6}( |$)|>|[-*+]( |$)|`{3}|~{3}|(- *)+$|(\\* *)+$|(_ *)+$|=+$)")
 	orderedMarkup = regexp.MustCompile(`^(\d+)([.)])( |$)`)
 )
 
 // paragraph はインラインの並びを段落にする。行頭と行末の空白と、空の行を除く。
-// 行頭が見出し・引用・リストの記号に見える行は、その記法として読まれないように \ でエスケープする。
+// 行頭が見出し・引用・リスト・コードブロックのフェンスの記号に見える行と、水平線や見出しの下線に見える行は、
+// その記法として読まれないように \ でエスケープする。
 func paragraph(ns []*node) string {
 	ls := lines(inline(ns))
 	for i, l := range ls {
@@ -313,7 +312,7 @@ func collapseSpace(s string) string {
 	var sb strings.Builder
 	space := false
 	for _, r := range s {
-		if r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == ' ' {
+		if r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == '\u00a0' {
 			if !space {
 				sb.WriteByte(' ')
 			}
@@ -326,13 +325,29 @@ func collapseSpace(s string) string {
 	return sb.String()
 }
 
+// inline はインラインの並びを文字列にする。
+// マクロの [...] は前後の文字とつながると 1 語に見えるため、前後に空白がなければ空白を入れる。
 func inline(ns []*node) string {
 	var sb strings.Builder
+	prevMacro := false
 	for _, n := range ns {
-		sb.WriteString(inlineNode(n))
+		s := inlineNode(n)
+		if s == "" {
+			continue
+		}
+		macro := n.isAC("structured-macro") && macroName(n) != "code"
+		if (macro || prevMacro) && sb.Len() > 0 && !endsWithSpace(sb.String()) && !startsWithSpace(s) {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString(s)
+		prevMacro = macro
 	}
 	return sb.String()
 }
+
+func startsWithSpace(s string) bool { return s[0] == ' ' || s[0] == '\n' }
+
+func endsWithSpace(s string) bool { c := s[len(s)-1]; return c == ' ' || c == '\n' }
 
 func inlineNode(n *node) string {
 	if n.isText {
@@ -376,7 +391,7 @@ func inlineNode(n *node) string {
 		}
 	}
 	if isBlock(n) {
-		return "\n" + joinBlocks(block(n), "\n") + "\n"
+		return "\n" + strings.Join(block(n), "\n") + "\n"
 	}
 	return inline(n.children)
 }
@@ -437,7 +452,7 @@ func htmlLink(n *node) string {
 	case text == "" || text == href:
 		return href
 	}
-	return "[" + text + "](" + dest(href) + ")"
+	return "[" + escapeLinkText(text) + "](" + dest(href) + ")"
 }
 
 // resource は ri: の要素が指す先を、リンク先の文字列と既定の表示名にする。
@@ -462,7 +477,25 @@ func resource(r *node) (target, label string) {
 		k := r.attrValue("space-key")
 		return "space:" + k, k
 	}
-	return "", ""
+	return "link:" + describe(r), ""
+}
+
+// describe は変換規則のない ri: の要素を、要素名と属性（版番号と local-id を除く）の 1 行にする。
+// リンクの先を捨てたことと、元の参照先を読み手が分かるようにするため。
+func describe(r *node) string {
+	s := r.name.Local
+	for _, a := range r.attr {
+		if a.Name.Local == "version-at-save" || a.Name.Local == "local-id" {
+			continue
+		}
+		s += " " + a.Name.Local + "=" + a.Value
+	}
+	return s
+}
+
+// escapeLinkText はリンクの表示名の角括弧をエスケープする。角括弧があるとリンクの終わりの位置が変わるため。
+func escapeLinkText(s string) string {
+	return strings.NewReplacer("[", `\[`, "]", `\]`).Replace(s)
 }
 
 func acLink(n *node) string {
@@ -488,7 +521,10 @@ func acLink(n *node) string {
 	if target == "" {
 		return label
 	}
-	return "[" + label + "](" + dest(target) + ")"
+	if label == "" && strings.HasPrefix(target, "link:") {
+		return "[link: " + strings.TrimPrefix(target, "link:") + "]"
+	}
+	return "[" + escapeLinkText(label) + "](" + dest(target) + ")"
 }
 
 func image(n *node) string {
@@ -496,7 +532,7 @@ func image(n *node) string {
 	if r := n.child(func(c *node) bool { return !c.isText && c.name.Space == riNS }); r != nil {
 		target, _ = resource(r)
 	}
-	s := "![" + n.attrValue("alt") + "](" + dest(target) + ")"
+	s := "![" + escapeLinkText(n.attrValue("alt")) + "](" + dest(target) + ")"
 	if c := n.acChild("caption"); c != nil {
 		if caption := strings.Join(lines(inline(c.children)), " "); caption != "" {
 			s += " " + caption
@@ -539,13 +575,22 @@ func macroInline(n *node) string {
 	case "toc":
 		return "[TOC]"
 	}
-	if _, ok := convert.PanelToAlert[name]; ok {
-		return body
+	if kind, ok := convert.PanelToAlert[name]; ok {
+		if body = strings.Join(lines(body), " "); body == "" {
+			return "[" + kind + "]"
+		}
+		return "[" + kind + ": " + body + "]"
+	}
+	s := placeholder(n)
+	if pb := n.acChild("plain-text-body"); pb != nil {
+		if code := codeSpan(collapseSpace(pb.rawText())); strings.Trim(code, " ") != "" {
+			s += " " + code
+		}
 	}
 	if body != "" {
-		return placeholder(n) + " " + body
+		s += " " + body
 	}
-	return placeholder(n)
+	return s
 }
 
 func plainBody(n *node) string {
@@ -607,7 +652,7 @@ func alert(kind, title string, body []string) string {
 		s += "\n**" + title + "**"
 	}
 	if len(body) > 0 {
-		s += "\n" + joinBlocks(body, "\n\n")
+		s += "\n" + strings.Join(body, "\n\n")
 	}
 	return quote(s)
 }
@@ -651,10 +696,10 @@ func list(n *node) string {
 		if c.isText {
 			continue
 		}
-		content := joinBlocks(renderBlocks(c.children), "\n")
+		content := strings.Join(renderBlocks(c.children), "\n")
 		if !c.isHTML("li") {
 			// li の外に置かれた要素（入れ子のリストなど）は、直前の項目の続きとして字下げする。
-			content = joinBlocks(block(c), "\n")
+			content = strings.Join(block(c), "\n")
 			if len(items) > 0 && content != "" {
 				items[len(items)-1] += "\n" + prefixLines(content, "  ", "")
 				continue
@@ -682,7 +727,7 @@ func taskList(n *node) string {
 		}
 		var content string
 		if b := t.acChild("task-body"); b != nil {
-			content = joinBlocks(renderBlocks(b.children), "\n")
+			content = strings.Join(renderBlocks(b.children), "\n")
 		}
 		// "[ ]" は項目の内容の一部として読まれるため、入れ子の字下げは "- " の幅にする。
 		items = append(items, item(marker, 2, content))
@@ -716,7 +761,7 @@ func adfExtension(n *node) []string {
 		if kind, ok := adfPanelToAlert[panelType]; ok {
 			return []string{alert(kind, "", body)}
 		}
-		return []string{quote(joinBlocks(body, "\n\n"))}
+		return []string{quote(strings.Join(body, "\n\n"))}
 	}
 	return append([]string{"[adf: " + typ + "]"}, body...)
 }
@@ -741,11 +786,11 @@ func table(n *node) string {
 	if len(rows) == 0 {
 		return ""
 	}
+	// 行数と列数はページの内容が決めるため、結合で埋まるセルの数か格子の大きさが上限を超える表は、格子を作らずに省略する。
+	tooLarge := "[table: too large]"
 	grid := make([][]string, len(rows))
-	occupied := make([]map[int]bool, len(rows))
-	for i := range occupied {
-		occupied[i] = map[int]bool{}
-	}
+	occupied := make([][]bool, len(rows))
+	cells := 0
 	merged := false
 	ncols := 0
 	for r, row := range rows {
@@ -754,22 +799,28 @@ func table(n *node) string {
 			if !cell.isHTML("th", "td") {
 				continue
 			}
-			for occupied[r][col] {
+			for col < len(occupied[r]) && occupied[r][col] {
 				col++
 			}
-			rs, cs := span(cell, "rowspan"), span(cell, "colspan")
-			// 列数はページの内容が決めるため、上限を超える表は格子を作らずに省略する。
-			// rowspan は残りの行数までしか使わないため、上限を設けない。
+			rs, cs := min(span(cell, "rowspan"), len(rows)-r), span(cell, "colspan")
 			if cs > maxColumns || col+cs > maxColumns {
-				return "[table: too large]"
+				return tooLarge
+			}
+			if cells += rs * cs; cells > maxCells {
+				return tooLarge
 			}
 			if rs > 1 || cs > 1 {
 				merged = true
 			}
-			for dr := 0; dr < rs && r+dr < len(rows); dr++ {
-				for dc := range cs {
-					occupied[r+dr][col+dc] = true
+			for dr := range rs {
+				occ := occupied[r+dr]
+				for len(occ) < col+cs {
+					occ = append(occ, false)
 				}
+				for dc := range cs {
+					occ[col+dc] = true
+				}
+				occupied[r+dr] = occ
 			}
 			for len(grid[r]) <= col {
 				grid[r] = append(grid[r], "")
@@ -781,9 +832,10 @@ func table(n *node) string {
 			grid[r][col] = text
 			col += cs
 		}
-		for c := range occupied[r] {
-			ncols = max(ncols, c+1)
-		}
+		ncols = max(ncols, len(occupied[r]), len(grid[r]))
+	}
+	if len(rows)*ncols > maxCells {
+		return tooLarge
 	}
 	var sb strings.Builder
 	if merged {
@@ -808,8 +860,12 @@ func table(n *node) string {
 	return strings.TrimSuffix(sb.String(), "\n")
 }
 
-// maxColumns は格子を作る表の列数の上限。HTML の colspan の上限と同じ値。
-const maxColumns = 1000
+// maxColumns は格子を作る表の列数の上限で、HTML の colspan の上限と同じ値。
+// maxCells は格子のセルの数の上限。
+const (
+	maxColumns = 1000
+	maxCells   = 100000
+)
 
 func span(cell *node, attr string) int {
 	if v, err := strconv.Atoi(strings.TrimSpace(cell.attrValue(attr))); err == nil && v > 1 {
@@ -819,8 +875,26 @@ func span(cell *node, attr string) int {
 }
 
 func cellText(cell *node) string {
-	s := strings.Join(lines(joinBlocks(renderBlocks(cell.children), "\n")), " / ")
+	s := strings.Join(cellLines(strings.Join(renderBlocks(cell.children), "\n")), " / ")
 	return strings.ReplaceAll(s, "|", `\|`)
+}
+
+// cellLines は lines と同じく行に分けるが、コードブロックの中の行は字下げを残す。
+func cellLines(s string) []string {
+	var out []string
+	inCode := false
+	for l := range strings.SplitSeq(s, "\n") {
+		t := strings.Trim(l, " \t")
+		if strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
+			inCode = !inCode
+		} else if inCode {
+			t = strings.TrimRight(l, " \t")
+		}
+		if t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // unbold は見出しの行のセル全体が太字なら太字の記号を除く。見出しの行は太字で表示されるため、記号は情報を増やさない。

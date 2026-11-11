@@ -67,6 +67,22 @@ func TestConvert_CodeKeepsCDATA(t *testing.T) {
 	}
 }
 
+func TestConvert_HugeRowspan(t *testing.T) {
+	in := `<table><tbody><tr><td colspan="999" rowspan="99999"><p>a</p></td></tr>` +
+		strings.Repeat(`<tr><td></td></tr>`, 20000) + `</tbody></table>`
+	start := time.Now()
+	got, err := Convert(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("Convert に %v かかった", d)
+	}
+	if want := "[table: too large]\n"; got != want {
+		t.Errorf("got %d バイト %.40q, want %q", len(got), got, want)
+	}
+}
+
 func TestConvert_InvalidXML(t *testing.T) {
 	if _, err := Convert("<p>unclosed"); err == nil {
 		t.Error("整形式でない本文でエラーにならない")

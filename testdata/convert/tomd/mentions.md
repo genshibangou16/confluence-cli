@@ -7,3 +7,5 @@
 ![構成図](attachment:diagram.png)
 
 ![](<attachment:screen shot.png>)![外部画像](https://example.com/a.png)
+
+[link: content-entity content-id=123]、[本文付きの未知のリンク](<link:content-entity content-id=456>)、[配列 \[0\] の説明](https://example.com/)、[\[草案\] 設計](<page:DEMO/[草案] 設計>)

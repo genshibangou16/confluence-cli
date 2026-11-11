@@ -26,3 +26,9 @@ expand の中の文章。
 左の本文。
 
 右の本文。コメントの付いた文。
+
+[macro: status title=A] [macro: status title=B] 直後の文字。
+
+前 [NOTE: インラインのパネル] 後
+
+整形済み: [macro: noformat] `raw text`
