@@ -66,16 +66,6 @@ func TestGuard_WritableSpaces(t *testing.T) {
 		t.Fatalf("empty list: %v", err)
 	}
 
-	// 許可リスト外のスペースへの作成では PageWriter が呼ばれない。
-	w := &fakePageWriter{}
-	c := NewPageCommand(&fakeWriteGetter{}, w, g)
-	_, err = c.Create(context.Background(), CreateRequest{SpaceID: "200", Title: "t", Body: "<p>x</p>", Input: InputStorage})
-	if domain.KindOf(err) != domain.ErrReadOnly {
-		t.Fatalf("create: %v", err)
-	}
-	if w.creates != 0 {
-		t.Fatalf("CreatePage called %d times", w.creates)
-	}
 }
 
 func TestGuard_SpaceLookupError(t *testing.T) {

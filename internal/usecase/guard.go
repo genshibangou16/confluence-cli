@@ -27,6 +27,8 @@ func NewWriteGuard(p WritePolicy, spaces SpaceIDFinder) *WriteGuard {
 
 // Check は spaceID のスペースへの書き込みが許可されていなければ ErrReadOnly を返す。
 // 設定はスペースキーで書かれ、ページはスペース ID しか持たないため、WritableSpaces があるときだけ API でキーを引く。
+// read_only の判定は API を呼ばずにできるため、checkReadOnly に分けてある。
+// 対象のスペースを知るために親ページなどを取得するユースケースは、その取得より前に checkReadOnly を呼ぶ。
 func (g *WriteGuard) Check(ctx context.Context, spaceID string) error {
 	if err := g.checkReadOnly(); err != nil {
 		return err
@@ -49,7 +51,6 @@ func (g *WriteGuard) Check(ctx context.Context, spaceID string) error {
 	}
 }
 
-// checkReadOnly は、対象のスペースを調べる API を呼ぶ前に read_only の設定で書き込みを拒否するために使う。
 func (g *WriteGuard) checkReadOnly() error {
 	if g.p.ReadOnly {
 		return &domain.Error{Kind: domain.ErrReadOnly, Message: "read_only の設定により書き込みは許可されていません"}

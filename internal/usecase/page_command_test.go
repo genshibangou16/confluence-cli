@@ -39,10 +39,11 @@ func (f *fakePageWriter) DeletePage(context.Context, domain.PageID) error {
 
 // fakeWriteGetter は ID ごとのページを返す。readBack が空でない ID は、その本文を読み戻しの本文として返す。
 type fakeWriteGetter struct {
-	pages    map[domain.PageID]domain.Page
-	readBack map[domain.PageID]string
-	w        *fakePageWriter
-	calls    []domain.PageID
+	pages       map[domain.PageID]domain.Page
+	readBack    map[domain.PageID]string
+	readBackErr error
+	w           *fakePageWriter
+	calls       []domain.PageID
 }
 
 func (f *fakeWriteGetter) GetPage(_ context.Context, id domain.PageID, body bool, _ int) (domain.Page, error) {
@@ -51,6 +52,9 @@ func (f *fakeWriteGetter) GetPage(_ context.Context, id domain.PageID, body bool
 		return p, nil
 	}
 	if f.w != nil && id == "900" {
+		if f.readBackErr != nil {
+			return domain.Page{}, f.readBackErr
+		}
 		p := domain.Page{ID: id, SpaceID: f.w.gotSpace, Title: f.w.gotTitle}
 		if body {
 			p.Body = f.w.gotBody
@@ -73,7 +77,7 @@ func TestCreate_InvalidStorageNoAPICall(t *testing.T) {
 	c, g, w := newCommand(WritePolicy{})
 	_, err := c.Create(context.Background(), CreateRequest{ParentID: "10", Title: "t", Body: "<p>x", Input: InputStorage})
 	var se *storage.SyntaxError
-	if !errors.As(err, &se) {
+	if !errors.As(err, &se) || domain.KindOf(err) != domain.ErrValidation {
 		t.Fatalf("err = %v", err)
 	}
 	if w.creates != 0 || len(g.calls) != 0 {
@@ -144,6 +148,7 @@ func TestCreate_ParentSpace(t *testing.T) {
 func TestCreate_Validation(t *testing.T) {
 	for name, r := range map[string]CreateRequest{
 		"no space":    {Title: "t", Body: "<p>x</p>", Input: InputStorage},
+		"blank title": {SpaceID: "100", Title: " \t", Body: "<p>x</p>", Input: InputStorage},
 		"no title":    {SpaceID: "100", Body: "<p>x</p>", Input: InputStorage},
 		"unknown fmt": {SpaceID: "100", Title: "t", Body: "<p>x</p>", Input: "html"},
 	} {
@@ -160,5 +165,26 @@ func TestCreate_ReadOnlyNoAPICall(t *testing.T) {
 	_, err := c.Create(context.Background(), CreateRequest{ParentID: "10", Title: "t", Body: "<p>x</p>", Input: InputStorage})
 	if domain.KindOf(err) != domain.ErrReadOnly || w.creates != 0 || len(g.calls) != 0 {
 		t.Fatalf("err=%v creates=%d gets=%v", err, w.creates, g.calls)
+	}
+}
+
+func TestCreate_DisallowedSpaceNoCreate(t *testing.T) {
+	c, _, w := newCommand(WritePolicy{WritableSpaces: []string{"DOC"}})
+	_, err := c.Create(context.Background(), CreateRequest{SpaceID: "200", Title: "t", Body: "<p>x</p>", Input: InputStorage})
+	if domain.KindOf(err) != domain.ErrReadOnly || w.creates != 0 {
+		t.Fatalf("err=%v creates=%d", err, w.creates)
+	}
+}
+
+func TestCreate_ReadBackFailure(t *testing.T) {
+	c, g, w := newCommand(WritePolicy{})
+	cause := &domain.Error{Kind: domain.ErrRateLimit, Message: "too many"}
+	g.readBackErr = cause
+	res, err := c.Create(context.Background(), CreateRequest{SpaceID: "100", Title: "t", Body: "<p>x</p>", Input: InputStorage})
+	if w.creates != 1 || res.Page.ID != "900" {
+		t.Fatalf("creates=%d result=%+v", w.creates, res)
+	}
+	if domain.KindOf(err) != domain.ErrAPI || !errors.Is(err, cause) || !strings.Contains(err.Error(), "900") {
+		t.Fatalf("err = %v", err)
 	}
 }
