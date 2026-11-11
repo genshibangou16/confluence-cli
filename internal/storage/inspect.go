@@ -144,3 +144,34 @@ func LostText(sent, got string) []string {
 	}
 	return lost
 }
+
+// MaxTaskID は body の ac:task-id の値のうち最大の整数を返す。整数として読めない値は無視し、ac:task-id が無ければ 0 を返す。
+// 解析できない箇所に達したら、そこまでの最大値を返す。
+func MaxTaskID(body string) int {
+	d, _ := Decoder(body)
+	maxID := 0
+	var text *strings.Builder
+	for {
+		tok, err := d.Token()
+		if err != nil {
+			return maxID
+		}
+		switch tok := tok.(type) {
+		case xml.StartElement:
+			if isAC(tok.Name, "task-id") {
+				text = &strings.Builder{}
+			}
+		case xml.CharData:
+			if text != nil {
+				text.Write(tok)
+			}
+		case xml.EndElement:
+			if text != nil && isAC(tok.Name, "task-id") {
+				if v, err := strconv.Atoi(strings.TrimSpace(text.String())); err == nil {
+					maxID = max(maxID, v)
+				}
+				text = nil
+			}
+		}
+	}
+}

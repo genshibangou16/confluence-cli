@@ -58,7 +58,7 @@ func (c *PageCommand) Create(ctx context.Context, r CreateRequest) (WriteResult,
 	if r.ParentID == "" && r.SpaceID == "" {
 		return WriteResult{}, validationError("スペースか親ページを指定してください")
 	}
-	body, err := toStorage(r.Body, r.Input)
+	body, err := toStorage(r.Body, r.Input, 0)
 	if err != nil {
 		return WriteResult{}, err
 	}
@@ -90,12 +90,13 @@ func (c *PageCommand) Create(ctx context.Context, r CreateRequest) (WriteResult,
 }
 
 // toStorage は入力を storage 形式にする。整形式でなければ、*storage.SyntaxError を Err に持つ ErrValidation を返す。
-func toStorage(body string, in InputFormat) (string, error) {
+// Markdown のタスクの ac:task-id は lastTaskID+1 から振る。
+func toStorage(body string, in InputFormat, lastTaskID int) (string, error) {
 	var out string
 	var err error
 	switch in {
 	case InputMarkdown:
-		out, err = frommd.Convert(body)
+		out, err = frommd.ConvertAfterTaskID(body, lastTaskID)
 	case InputStorage:
 		out, err = body, storage.Validate(body)
 	default:
@@ -185,7 +186,7 @@ func (c *PageCommand) Update(ctx context.Context, r UpdateRequest) (WriteResult,
 	}
 	if r.Body != nil {
 		// 現在の本文を取得する前に、入力の誤りと、変換後の本文が空であることを確認する。
-		in, err := toStorage(*r.Body, r.Input)
+		in, err := toStorage(*r.Body, r.Input, 0)
 		if err != nil {
 			return WriteResult{}, err
 		}
@@ -353,7 +354,12 @@ func newBody(cur string, r UpdateRequest) (body, in, replaced string, err error)
 	if r.Body == nil {
 		return cur, "", "", nil
 	}
-	in, err = toStorage(*r.Body, r.Input)
+	// 現在の本文を残す更新では、足すタスクの ac:task-id を現在の本文のタスクと重ならないようにする。
+	lastTaskID := 0
+	if r.Mode != ModeReplace {
+		lastTaskID = storage.MaxTaskID(cur)
+	}
+	in, err = toStorage(*r.Body, r.Input, lastTaskID)
 	if err != nil {
 		return "", "", "", err
 	}

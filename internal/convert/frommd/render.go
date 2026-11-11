@@ -196,7 +196,7 @@ func (r *renderer) list(n *ast.List) {
 }
 
 // taskList はすべての項目にチェックボックスがあるリストを ac:task-list にする。
-// ac:task-id は文書全体で 1 からの連番にし、入れ子のリストは親のタスクの ac:task-body の中に置く。
+// ac:task-id は文書全体で renderer.taskID の次からの連番にし、入れ子のリストは親のタスクの ac:task-body の中に置く。
 func (r *renderer) taskList(n *ast.List) {
 	r.write("<ac:task-list>\n")
 	for li := n.FirstChild(); li != nil; li = li.NextSibling() {

@@ -244,3 +244,13 @@ func TestConvert_NoTrailingNewline(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+func TestConvertAfterTaskID(t *testing.T) {
+	got, err := ConvertAfterTaskID("- [ ] a\n- [x] b\n", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "<ac:task-id>3</ac:task-id>") || !strings.Contains(got, "<ac:task-id>4</ac:task-id>") || strings.Contains(got, "<ac:task-id>1</ac:task-id>") {
+		t.Fatalf("got %q", got)
+	}
+}

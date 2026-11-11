@@ -116,3 +116,17 @@ func TestInspect_ClosingWrapperNoPanic(t *testing.T) {
 	_ = CommentMarkerRefs(body)
 	_ = LostText(body, body)
 }
+
+func TestMaxTaskID(t *testing.T) {
+	cases := map[string]int{
+		"":         0,
+		"<p>a</p>": 0,
+		"<ac:task-list><ac:task><ac:task-id>1</ac:task-id></ac:task><ac:task><ac:task-id> 12 </ac:task-id></ac:task><ac:task><ac:task-id>3</ac:task-id></ac:task></ac:task-list>": 12,
+		"<ac:task-list><ac:task><ac:task-id>x</ac:task-id></ac:task><ac:task><ac:task-id>2</ac:task-id></ac:task></ac:task-list>":                                                 2,
+	}
+	for body, want := range cases {
+		if got := MaxTaskID(body); got != want {
+			t.Errorf("MaxTaskID(%q) = %d, want %d", body, got, want)
+		}
+	}
+}

@@ -546,3 +546,23 @@ func TestUpdate_VerifyReadsLatestWhenVersionUnknown(t *testing.T) {
 		t.Fatalf("GetPage の版 = %v, want [0 0]", s.getVersions)
 	}
 }
+
+func TestUpdate_MarkdownTaskIDsAfterExisting(t *testing.T) {
+	cur := "<h2>A</h2><ac:task-list><ac:task><ac:task-id>1</ac:task-id><ac:task-status>incomplete</ac:task-status><ac:task-body>x</ac:task-body></ac:task><ac:task><ac:task-id>2</ac:task-id><ac:task-status>complete</ac:task-status><ac:task-body>y</ac:task-body></ac:task></ac:task-list><h2>B</h2><p>b</p>"
+	for name, tc := range map[string]struct {
+		mode    UpdateMode
+		section string
+	}{
+		"append":  {ModeAppend, ""},
+		"prepend": {ModePrepend, ""},
+		"section": {ModeSection, "B"},
+	} {
+		c, s := newUpdateCommand(WritePolicy{}, cur)
+		if _, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr("- [ ] 新しいタスク\n"), Input: InputMarkdown, Mode: tc.mode, Section: tc.section}); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if strings.Count(s.gotBody, "<ac:task-id>3</ac:task-id>") != 1 || strings.Count(s.gotBody, "<ac:task-id>1</ac:task-id>") != 1 {
+			t.Errorf("%s: body = %q", name, s.gotBody)
+		}
+	}
+}
