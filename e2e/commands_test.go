@@ -404,6 +404,13 @@ func TestE2E_ReadOnlyAndWritableSpaces(t *testing.T) {
 	id := e.create(t, e.root, "page", "<p>元の本文</p>", "storage")
 	baseline := e.storage(t, id)
 	v := e.version(t, id)
+	// --dry-run は書き込まないため、read_only と writable_spaces でも成功する。
+	dryRunAllowed := func(t *testing.T) {
+		t.Helper()
+		if _, errOut, code := e.write(t, id, "page", "update", "--dry-run", "--body", "<p>dry-run の本文</p>"); code != 0 {
+			t.Errorf("--dry-run が拒否された: %s", errOut)
+		}
+	}
 	refused := func(t *testing.T, target string, args ...string) {
 		t.Helper()
 		out, errOut, code := e.write(t, target, args...)
@@ -425,6 +432,7 @@ func TestE2E_ReadOnlyAndWritableSpaces(t *testing.T) {
 		refused(t, e.root, "page", "create", "--title", e.newTitle(t, "ro"), "--body", "<p>x</p>", "--format", "json")
 		refused(t, id, "label", "add", "e2e-read-only", "--format", "json")
 		refused(t, id, "page", "delete", "--format", "json")
+		dryRunAllowed(t)
 	})
 	t.Run("writable_spaces", func(t *testing.T) {
 		e.userConfig(t, func(m map[string]any) { delete(m, "read_only"); m["writable_spaces"] = []string{"E2E-NO-SUCH-SPACE"} })
@@ -433,6 +441,7 @@ func TestE2E_ReadOnlyAndWritableSpaces(t *testing.T) {
 		refused(t, e.root, "page", "create", "--title", e.newTitle(t, "ws"), "--body", "<p>x</p>", "--format", "json")
 		refused(t, id, "label", "add", "e2e-writable-spaces", "--format", "json")
 		refused(t, id, "page", "delete", "--format", "json")
+		dryRunAllowed(t)
 	})
 
 	assertSame(t, "拒否された更新", baseline, e.storage(t, id))
