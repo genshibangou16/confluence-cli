@@ -68,10 +68,8 @@ func Truncate(s string, n int) string {
 
 var tagRe = regexp.MustCompile(`<[^>]*>`)
 
-// CleanExcerpt は検索結果の抜粋から、ハイライト用のマーカーと HTML タグを除き、
-// HTML エンティティを戻して、連続する空白を 1 つにまとめる。
+// CleanExcerpt は検索結果の抜粋から HTML タグを除き、HTML エンティティを戻して、連続する空白を 1 つにまとめる。
 func CleanExcerpt(s string) string {
-	s = strings.NewReplacer("@@@hl@@@", "", "@@@endhl@@@", "").Replace(s)
 	s = tagRe.ReplaceAllString(s, "")
 	s = SanitizeText(html.UnescapeString(s))
 	return strings.Join(strings.Fields(s), " ")

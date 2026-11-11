@@ -73,7 +73,7 @@ func userConfigPath(env func(string) string) string {
 // 無ければパスと内容は空になる。
 // 他のユーザーが置いたファイルや書き換えられるファイルを読まないよう、次の制限を課す。
 //   - home より上は探さない（cwd と home はシンボリックリンクを解決してから比較する）。
-//   - シンボリックリンク、所有者が実行ユーザーでないファイル、グループ・その他に書き込み権限があるファイルはスキップして警告を返す。
+//   - シンボリックリンク、通常のファイルでないもの、所有者が実行ユーザーでないファイル、グループ・その他に書き込み権限があるファイルはスキップして警告を返す。
 //
 // 検査と読み込みの間にファイルを差し替えられないよう、ファイルは一度だけ開き、
 // 検査も内容の読み込みも開いたファイルディスクリプタに対して行う。
@@ -121,6 +121,10 @@ func readLocalFile(p string) (data []byte, warn string, ok bool) {
 	if li.Mode()&fs.ModeSymlink != 0 {
 		return nil, fmt.Sprintf("ローカル設定 %s はシンボリックリンクのためスキップする", p), false
 	}
+	// FIFO は書き込む側が現れるまで Open が戻らないため、開く前に通常ファイルかを確認する。
+	if !li.Mode().IsRegular() {
+		return nil, fmt.Sprintf("ローカル設定 %s は通常のファイルではないためスキップする", p), false
+	}
 	f, err := os.Open(p)
 	if err != nil {
 		return nil, fmt.Sprintf("ローカル設定 %s を開けないためスキップする", p), false
@@ -130,7 +134,7 @@ func readLocalFile(p string) (data []byte, warn string, ok bool) {
 	if err != nil {
 		return nil, fmt.Sprintf("ローカル設定 %s の情報を取得できないためスキップする", p), false
 	}
-	// Lstat と Open の間にシンボリックリンクへ差し替えられた場合、開いたファイルは Lstat の結果と別物になる。
+	// Lstat と Open の間に差し替えられた場合、開いたファイルは Lstat の結果と別物になる。
 	if !fi.Mode().IsRegular() || !os.SameFile(li, fi) {
 		return nil, fmt.Sprintf("ローカル設定 %s が検査中に変更されたためスキップする", p), false
 	}
@@ -314,13 +318,14 @@ func mergeSpaces(user, local *[]string) []string {
 	case local == nil:
 		return *user
 	}
+	// WriteGuard.Check がスペースキーを大文字小文字を区別せずに比べるため、ここでも区別しない。
 	inLocal := map[string]bool{}
 	for _, k := range *local {
-		inLocal[k] = true
+		inLocal[strings.ToUpper(k)] = true
 	}
 	out := []string{}
 	for _, k := range *user {
-		if inLocal[k] {
+		if inLocal[strings.ToUpper(k)] {
 			out = append(out, k)
 		}
 	}

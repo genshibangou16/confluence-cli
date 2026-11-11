@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	digitsRe    = regexp.MustCompile(`^[0-9]+$`)
-	pagesPathRe = regexp.MustCompile(`/pages/([0-9]+)(?:/|$)`)
+	digitsRe = regexp.MustCompile(`^[0-9]+$`)
+	// 編集画面の URL は /pages/edit-v2/<id> か /pages/edit/<id> になる。
+	pagesPathRe = regexp.MustCompile(`/pages/(?:edit-v2/|edit/)?([0-9]+)(?:/|$)`)
 	tinyPathRe  = regexp.MustCompile(`/x/([A-Za-z0-9_-]+)/?$`)
 )
 
@@ -43,17 +44,17 @@ func ParsePageRef(s string) (PageID, error) {
 }
 
 // decodeTinyLink は tiny link のコードをページ ID に変換する。
-// コードは、ページ ID を 4 バイトのリトルエンディアン整数とみなし、
+// コードは、ページ ID を 8 バイトのリトルエンディアン整数とみなし、
 // 末尾の 0 バイトを省いたうえで URL セーフな base64（パディングなし）にしたもの。
 func decodeTinyLink(code string) (PageID, bool) {
 	if pad := len(code) % 4; pad != 0 {
 		code += strings.Repeat("=", 4-pad)
 	}
 	b, err := base64.URLEncoding.DecodeString(code)
-	if err != nil || len(b) == 0 || len(b) > 4 {
+	if err != nil || len(b) == 0 || len(b) > 8 {
 		return "", false
 	}
-	var buf [4]byte
+	var buf [8]byte
 	copy(buf[:], b)
-	return PageID(strconv.FormatUint(uint64(binary.LittleEndian.Uint32(buf[:])), 10)), true
+	return PageID(strconv.FormatUint(binary.LittleEndian.Uint64(buf[:]), 10)), true
 }

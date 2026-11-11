@@ -27,7 +27,7 @@ func TestSearch_MapsFields(t *testing.T) {
 	}
 	h := got[0]
 	if h.ID != "123" || h.Title != "T" || h.Type != "page" || h.SpaceKey != "DEV" ||
-		h.Excerpt != "a @@@hl@@@x@@@endhl@@@" ||
+		h.Excerpt != "a x" ||
 		h.URL != "https://example.atlassian.net/wiki/spaces/DEV/pages/123/T" ||
 		!h.LastModified.Equal(time.Date(2026, 6, 10, 1, 3, 37, 0, time.UTC)) {
 		t.Errorf("h=%+v", h)
@@ -53,14 +53,14 @@ func TestSearch_EncodesCQL(t *testing.T) {
 	}
 }
 
-func TestSearch_StripsHighlightFromTitle(t *testing.T) {
+func TestSearch_StripsHighlightFromTitleAndExcerpt(t *testing.T) {
 	var rec []recorded
-	c := recordingClient(t, 200, `{"results":[{"content":{"id":"1","type":"page"},"title":"a@@@hl@@@b@@@endhl@@@c","excerpt":""}]}`, &rec)
+	c := recordingClient(t, 200, `{"results":[{"content":{"id":"1","type":"page"},"title":"a@@@hl@@@b@@@endhl@@@c","excerpt":"前@@@hl@@@b@@@endhl@@@後"}]}`, &rec)
 	got, err := c.Search(context.Background(), "title ~ b", 10, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got[0].Title != "abc" {
-		t.Fatalf("title = %q", got[0].Title)
+	if got[0].Title != "abc" || got[0].Excerpt != "前b後" {
+		t.Fatalf("title = %q, excerpt = %q", got[0].Title, got[0].Excerpt)
 	}
 }

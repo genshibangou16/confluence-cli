@@ -20,7 +20,7 @@ func TestTruncate_Runes(t *testing.T) {
 }
 
 func TestCleanExcerpt(t *testing.T) {
-	got := CleanExcerpt("@@@hl@@@議事@@@endhl@@@録\n<b>x</b>")
+	got := CleanExcerpt("議事録\n<b>x</b>")
 	if got != "議事録 x" {
 		t.Errorf("got %q", got)
 	}

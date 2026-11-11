@@ -188,6 +188,7 @@ func TestLoad_PolicyCannotBeLoosenedByLocal(t *testing.T) {
 		{"intersection", base + "writable_spaces: [A, B]\n", "writable_spaces: [B, C]\n", false, []string{"B"}},
 		{"user unset", base, "writable_spaces: [C]\n", false, []string{"C"}},
 		{"local unset", base + "writable_spaces: [A]\n", "", false, []string{"A"}},
+		{"case-insensitive intersection", base + "writable_spaces: [Dev, B]\n", "writable_spaces: [DEV]\n", false, []string{"Dev"}},
 	}
 	for _, c := range cases {
 		_, src := newFixture(t, c.user, c.local)
@@ -289,6 +290,17 @@ func TestFindLocal_ReturnsContent(t *testing.T) {
 	_, data, _ := FindLocal(src.Cwd, src.Home)
 	if string(data) != "base_url: https://a.atlassian.net\n" {
 		t.Fatalf("data=%q", data)
+	}
+}
+
+func TestFindLocal_SkipsDirectory(t *testing.T) {
+	home := t.TempDir()
+	if err := os.Mkdir(filepath.Join(home, LocalConfigName), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got, _, warns := FindLocal(home, home)
+	if got != "" || len(warns) != 1 || !strings.Contains(warns[0], "通常のファイルではない") {
+		t.Fatalf("got=%q warns=%v", got, warns)
 	}
 }
 

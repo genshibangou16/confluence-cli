@@ -94,6 +94,7 @@ func (c *Client) do(ctx context.Context, ep endpoint, q url.Values, in, out any)
 		u += "?" + q.Encode()
 	}
 
+	retried := false
 	for attempt := 1; ; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return nil, &domain.Error{Kind: domain.ErrAPI, Message: err.Error(), Err: err}
@@ -132,9 +133,15 @@ func (c *Client) do(ctx context.Context, ep endpoint, q url.Values, in, out any)
 		}
 
 		if attempt < c.maxAttempts && retryable(ep.method, resp.StatusCode) {
+			retried = true
 			c.sleep(ctx, retryDelay(resp.Header.Get("Retry-After"), attempt, time.Now()))
 			continue
 		}
-		return nil, apiError(ep, resp.StatusCode, data)
+		e := apiError(ep, resp.StatusCode, data)
+		// 429 や 503 を返した試行でも、サーバーが更新を反映していることがある。そのときは再送が版の競合で 409 になる。
+		if retried && resp.StatusCode == http.StatusConflict {
+			e.Hint = "再送する前の試行で更新が反映された可能性があります。page versions で版を確認してください。"
+		}
+		return nil, e
 	}
 }

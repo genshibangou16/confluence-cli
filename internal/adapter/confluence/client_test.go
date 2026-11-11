@@ -187,6 +187,32 @@ func TestDo_RetryResendsBody(t *testing.T) {
 	}
 }
 
+func TestDo_ConflictAfterRetryHintsEarlierAttempt(t *testing.T) {
+	var n int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&n, 1) == 1 {
+			w.WriteHeader(503)
+			return
+		}
+		w.WriteHeader(409)
+	}))
+	defer srv.Close()
+	ep := endpoint{method: http.MethodPut, path: "/wiki/api/v2/pages/1"}
+	_, err := newTestClient(srv, &sleepRecorder{}).do(context.Background(), ep, nil, map[string]int{"a": 1}, nil)
+	var de *domain.Error
+	if !errors.As(err, &de) || de.Kind != domain.ErrConflict || !strings.Contains(de.Hint, "page versions") || n != 2 {
+		t.Fatalf("err = %#v, n = %d", err, n)
+	}
+
+	// 再送していない 409 には、前の試行についての案内を付けない。
+	srv409 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(409) }))
+	defer srv409.Close()
+	_, err = newTestClient(srv409, &sleepRecorder{}).do(context.Background(), ep, nil, map[string]int{"a": 1}, nil)
+	if !errors.As(err, &de) || de.Kind != domain.ErrConflict || strings.Contains(de.Hint, "page versions") {
+		t.Fatalf("no retry: err = %#v", err)
+	}
+}
+
 func TestDo_NoRetryForPOST(t *testing.T) {
 	var n int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
