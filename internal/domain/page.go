@@ -52,11 +52,13 @@ type Label struct {
 	Prefix string
 }
 
+// SearchHit の SpaceID は、検索 API が返さないため、タイトル検索のときだけページ API で埋める。それ以外では空。
 type SearchHit struct {
 	ID           PageID
 	Title        string
 	Type         string
 	SpaceKey     string
+	SpaceID      string
 	Excerpt      string
 	URL          string
 	LastModified time.Time

@@ -487,3 +487,14 @@ func TestJSON_KeysCamelCase(t *testing.T) {
 		}
 	}
 }
+
+func TestRoot_Version(t *testing.T) {
+	e := newEnv(t, nil)
+	e.deps.Version = "v1.2.3"
+	if code := e.run("--version"); code != 0 {
+		t.Fatalf("code = %d, stderr = %s", code, e.stderr)
+	}
+	if e.stdout.String() != "confluence-cli v1.2.3\n" {
+		t.Fatalf("stdout = %q", e.stdout)
+	}
+}

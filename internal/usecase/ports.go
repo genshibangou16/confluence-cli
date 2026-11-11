@@ -12,6 +12,10 @@ type Searcher interface {
 	Search(ctx context.Context, cql string, limit int, all bool) ([]domain.SearchHit, error)
 }
 
+type PagesByIDGetter interface {
+	GetPagesByIDs(ctx context.Context, ids []domain.PageID) ([]domain.PageSummary, error)
+}
+
 type SpaceKeyFinder interface {
 	SpaceByKey(ctx context.Context, key string) (domain.Space, error)
 }

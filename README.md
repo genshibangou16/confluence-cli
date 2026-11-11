@@ -34,6 +34,8 @@ make build          # ./confluence-cli を作る
 make release-build  # 全プラットフォーム向けの confluence-cli-<os>-<arch> を作る
 ```
 
+`confluence-cli --version` はバージョンを表示する。`make build` と `make release-build` は `git describe` の値を埋め込み、`go install` と `make install` では `dev` になる。
+
 ## 設定
 
 `confluence-cli config init` で、ユーザー設定ファイルに `base_url`・`email`・`api_token` を書き込む。

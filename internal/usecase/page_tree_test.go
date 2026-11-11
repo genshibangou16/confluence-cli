@@ -72,17 +72,3 @@ func TestPageTree_AncestorsWithoutPages(t *testing.T) {
 		t.Fatalf("calls = %v, got = %+v", l.byIDsCalls, got)
 	}
 }
-
-func TestPageTree_Pages(t *testing.T) {
-	l := &fakePageLister{pages: map[domain.PageID]domain.PageSummary{"2": {ID: "2", SpaceID: "10"}}}
-	got, err := NewPageTree(l).Pages(context.Background(), []domain.PageID{"2", "3"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(got, []domain.PageSummary{{ID: "2", SpaceID: "10"}}) {
-		t.Fatalf("got %+v", got)
-	}
-	if _, err := NewPageTree(l).Pages(context.Background(), nil); err != nil || len(l.byIDsCalls) != 1 {
-		t.Fatalf("empty ids: err = %v, calls = %v", err, l.byIDsCalls)
-	}
-}

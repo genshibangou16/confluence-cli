@@ -28,7 +28,7 @@ func (s *SpaceService) ResolveID(ctx context.Context, key, id string) (string, e
 	if id != "" && id != sp.ID {
 		return "", &domain.Error{
 			Kind:    domain.ErrValidation,
-			Message: fmt.Sprintf("--space-key %q の space-id は %s で、--space-id %s と一致しない", key, sp.ID, id),
+			Message: fmt.Sprintf("--space-key %q の space-id は %s で、--space-id %s と一致しません", key, sp.ID, id),
 		}
 	}
 	return sp.ID, nil

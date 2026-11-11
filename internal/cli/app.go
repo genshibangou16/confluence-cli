@@ -19,7 +19,6 @@ type App struct {
 	Commands *usecase.PageCommand
 	LabelCmd *usecase.LabelCommand
 	Guard    *usecase.WriteGuard
-	Settings config.Settings
 }
 
 // buildApp は設定を読み込み、Confluence のクライアントを 1 つ作ってユースケースに渡す。
@@ -28,19 +27,19 @@ type App struct {
 func buildApp(ctx context.Context, d Deps) (*App, error) {
 	s, warns, err := config.Load(d.Sources)
 	for _, w := range warns {
-		fmt.Fprintln(d.Stderr, "Warning: "+w)
+		fmt.Fprintln(d.Stderr, "warning: "+w)
 	}
 	if err != nil {
 		return nil, err
 	}
 	root, warn := confluence.ResolveRoot(ctx, d.HTTP, s.BaseURL, cache.File{Dir: d.CacheDir})
 	if warn != "" {
-		fmt.Fprintln(d.Stderr, "Warning: "+warn)
+		fmt.Fprintln(d.Stderr, "warning: "+warn)
 	}
 	c := confluence.New(confluence.Options{Root: root, Email: s.Email, Token: s.APIToken, HTTP: d.HTTP})
 	guard := usecase.NewWriteGuard(usecase.WritePolicy{ReadOnly: s.ReadOnly, WritableSpaces: s.WritableSpaces}, c)
 	return &App{
-		Search:   usecase.NewSearchService(c),
+		Search:   usecase.NewSearchService(c, c),
 		Spaces:   usecase.NewSpaceService(c),
 		Pages:    usecase.NewPageQuery(c),
 		Tree:     usecase.NewPageTree(c),
@@ -48,6 +47,5 @@ func buildApp(ctx context.Context, d Deps) (*App, error) {
 		Commands: usecase.NewPageCommand(c, c, guard),
 		LabelCmd: usecase.NewLabelCommand(c, c, guard),
 		Guard:    guard,
-		Settings: s,
 	}, nil
 }

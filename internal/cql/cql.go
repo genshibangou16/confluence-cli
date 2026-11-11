@@ -65,7 +65,7 @@ func Build(f Filter) (string, error) {
 		// ORDER BY の後ろに AND を連結すると不正な CQL になるため、条件部と並び順部に分ける。
 		if loc := orderByRe.FindStringIndex(raw); loc != nil {
 			if f.Sort != SortRelevance {
-				return "", validation("RawCQL に ORDER BY が含まれているため、並び順を同時に指定できない")
+				return "", validation("RawCQL に ORDER BY が含まれているため、並び順を同時に指定できません")
 			}
 			orderBy = " " + strings.TrimSpace(raw[loc[0]:])
 			raw = strings.TrimSpace(raw[:loc[0]])
@@ -101,7 +101,7 @@ func Build(f Filter) (string, error) {
 		case dateSince.MatchString(f.Since):
 			filters = append(filters, "lastmodified >= "+Quote(f.Since))
 		default:
-			return "", validation("--since の形式が不正: %q（例: 30d、2026-01-01）", f.Since)
+			return "", validation("--since の形式が不正です: %q（例: 30d、2026-01-01）", f.Since)
 		}
 	}
 	if f.Author != "" {
@@ -113,7 +113,7 @@ func Build(f Filter) (string, error) {
 	}
 
 	if !hasTerm && len(filters) == 0 {
-		return "", validation("検索語、--cql、または絞り込み条件を指定する必要がある")
+		return "", validation("検索語、--cql、または絞り込み条件を指定してください")
 	}
 	if rawOnly && len(filters) > 0 {
 		conds[0] = "(" + conds[0] + ")"

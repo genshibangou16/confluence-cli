@@ -30,7 +30,7 @@ func TestSearch_FallsBackToTextOnValidationError(t *testing.T) {
 		errs: []error{&domain.Error{Kind: domain.ErrValidation, Status: 400}},
 		hits: []domain.SearchHit{{ID: "1"}},
 	}
-	hits, warnings, err := NewSearchService(fs).Search(context.Background(), cql.Filter{Mode: cql.ModeSite, Query: "foo"}, 25, false)
+	hits, warnings, err := NewSearchService(fs, &fakePageLister{}).Search(context.Background(), cql.Filter{Mode: cql.ModeSite, Query: "foo"}, 25, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestSearch_FallsBackToTextOnValidationError(t *testing.T) {
 func TestSearch_NoFallbackForOtherModes(t *testing.T) {
 	want := &domain.Error{Kind: domain.ErrValidation, Status: 400}
 	fs := &fakeSearcher{errs: []error{want}}
-	_, warnings, err := NewSearchService(fs).Search(context.Background(), cql.Filter{Mode: cql.ModeTitle, Query: "foo"}, 25, false)
+	_, warnings, err := NewSearchService(fs, &fakePageLister{}).Search(context.Background(), cql.Filter{Mode: cql.ModeTitle, Query: "foo"}, 25, false)
 	if !errors.Is(err, want) {
 		t.Fatalf("err = %v", err)
 	}
@@ -63,7 +63,7 @@ func TestSearch_NoFallbackForOtherModes(t *testing.T) {
 func TestSearch_NoFallbackForNonValidationError(t *testing.T) {
 	want := &domain.Error{Kind: domain.ErrAuth, Status: 401}
 	fs := &fakeSearcher{errs: []error{want}}
-	_, _, err := NewSearchService(fs).Search(context.Background(), cql.Filter{Mode: cql.ModeSite, Query: "foo"}, 25, false)
+	_, _, err := NewSearchService(fs, &fakePageLister{}).Search(context.Background(), cql.Filter{Mode: cql.ModeSite, Query: "foo"}, 25, false)
 	if !errors.Is(err, want) || len(fs.calls) != 1 {
 		t.Fatalf("err = %v, calls = %q", err, fs.calls)
 	}
@@ -72,7 +72,7 @@ func TestSearch_NoFallbackForNonValidationError(t *testing.T) {
 func TestSearch_NoFallbackForRawCQL(t *testing.T) {
 	want := &domain.Error{Kind: domain.ErrValidation, Status: 400}
 	fs := &fakeSearcher{errs: []error{want}}
-	_, _, err := NewSearchService(fs).Search(context.Background(), cql.Filter{Mode: cql.ModeSite, RawCQL: "type = page"}, 25, false)
+	_, _, err := NewSearchService(fs, &fakePageLister{}).Search(context.Background(), cql.Filter{Mode: cql.ModeSite, RawCQL: "type = page"}, 25, false)
 	if !errors.Is(err, want) || len(fs.calls) != 1 {
 		t.Fatalf("err = %v, calls = %q", err, fs.calls)
 	}
@@ -80,8 +80,36 @@ func TestSearch_NoFallbackForRawCQL(t *testing.T) {
 
 func TestSearch_BuildErrorDoesNotCallAPI(t *testing.T) {
 	fs := &fakeSearcher{}
-	_, _, err := NewSearchService(fs).Search(context.Background(), cql.Filter{}, 25, false)
+	_, _, err := NewSearchService(fs, &fakePageLister{}).Search(context.Background(), cql.Filter{}, 25, false)
 	if domain.KindOf(err) != domain.ErrValidation || len(fs.calls) != 0 {
 		t.Fatalf("err = %v, calls = %q", err, fs.calls)
+	}
+}
+
+func TestSearch_TitleFillsSpaceID(t *testing.T) {
+	fs := &fakeSearcher{hits: []domain.SearchHit{{ID: "2"}, {ID: "3"}}}
+	l := &fakePageLister{pages: map[domain.PageID]domain.PageSummary{"2": {ID: "2", SpaceID: "10"}}}
+	hits, _, err := NewSearchService(fs, l).Search(context.Background(), cql.Filter{Mode: cql.ModeTitle, Query: "foo"}, 25, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 取得できなかったページの SpaceID は空のまま。
+	if hits[0].SpaceID != "10" || hits[1].SpaceID != "" || len(l.byIDsCalls) != 1 {
+		t.Fatalf("hits = %+v, calls = %v", hits, l.byIDsCalls)
+	}
+}
+
+func TestSearch_SpaceIDNotFilledForOtherModesOrNoHits(t *testing.T) {
+	l := &fakePageLister{}
+	fs := &fakeSearcher{hits: []domain.SearchHit{{ID: "2"}}}
+	if _, _, err := NewSearchService(fs, l).Search(context.Background(), cql.Filter{Mode: cql.ModeSite, Query: "foo"}, 25, false); err != nil {
+		t.Fatal(err)
+	}
+	fs = &fakeSearcher{}
+	if _, _, err := NewSearchService(fs, l).Search(context.Background(), cql.Filter{Mode: cql.ModeTitle, Query: "foo"}, 25, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(l.byIDsCalls) != 0 {
+		t.Fatalf("calls = %v", l.byIDsCalls)
 	}
 }

@@ -32,10 +32,10 @@ func (f bodyFlags) check(cmd *cobra.Command) error {
 		return err
 	}
 	if f.inputFormat != string(usecase.InputStorage) && f.inputFormat != string(usecase.InputMarkdown) {
-		return validationf("--input-format に指定できない値: %q（storage, markdown のいずれか）", f.inputFormat)
+		return validationf("--input-format に指定できない値です: %q（storage, markdown のいずれか）", f.inputFormat)
 	}
 	if cmd.Flags().Changed("body") && cmd.Flags().Changed("body-file") {
-		return validationf("--body と --body-file は同時に指定できない")
+		return validationf("--body と --body-file は同時に指定できません")
 	}
 	return nil
 }
@@ -56,17 +56,17 @@ func (f bodyFlags) read(cmd *cobra.Command, stdin io.Reader) (*string, error) {
 	if f.bodyFile != "-" {
 		file, err := os.Open(f.bodyFile)
 		if err != nil {
-			return nil, validationf("--body-file を読めない: %v", err)
+			return nil, validationf("--body-file を読めません: %v", err)
 		}
 		defer file.Close()
 		r = file
 	}
 	b, err := io.ReadAll(io.LimitReader(r, maxBodyBytes+1))
 	if err != nil {
-		return nil, validationf("--body-file を読めない: %v", err)
+		return nil, validationf("--body-file を読めません: %v", err)
 	}
 	if int64(len(b)) > maxBodyBytes {
-		return nil, validationf("--body-file の本文が %d バイトを超えている", maxBodyBytes)
+		return nil, validationf("--body-file の本文が %d バイトを超えています", maxBodyBytes)
 	}
 	s := string(b)
 	return &s, nil
@@ -137,7 +137,7 @@ func newPageCreateCmd(d Deps) *cobra.Command {
 				return err
 			}
 			if cmd.Flags().Changed("parent") && cmd.Flags().Changed("parent-id") {
-				return validationf("--parent と --parent-id は同時に指定できない")
+				return validationf("--parent と --parent-id は同時に指定できません")
 			}
 			if cmd.Flags().Changed("parent-id") {
 				parent = parentID
@@ -224,11 +224,11 @@ func newPageUpdateCmd(d Deps) *cobra.Command {
 				req.Mode = usecase.ModeSection
 			}
 			if modes > 1 {
-				return validationf("--append・--prepend・--section は同時に指定できない")
+				return validationf("--append・--prepend・--section は同時に指定できません")
 			}
 			// usecase は ExpectedVersion が 0 なら版を確認しないため、明示した 0 を受け付けると確認がされない。
 			if cmd.Flags().Changed("expect-version") && expectVersion < 1 {
-				return validationf("--expect-version には 1 以上の版番号を指定する")
+				return validationf("--expect-version には 1 以上の版番号を指定してください")
 			}
 			if cmd.Flags().Changed("title") {
 				req.Title = &title

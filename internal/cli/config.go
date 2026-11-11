@@ -170,7 +170,7 @@ func newConfigInitLocalCmd(d Deps) *cobra.Command {
 				return err
 			case !li.Mode().IsRegular():
 				// シンボリックリンクの先（ユーザー設定など）を書き換えないため、通常ファイル以外は上書きしない。
-				return validationf("%s が通常のファイルではないため書き込まない", path)
+				return validationf("%s が通常のファイルではないため書き込みません", path)
 			default:
 				ok, err := p.confirm(fmt.Sprintf("%s を上書きしますか？", path))
 				if err != nil {
@@ -186,7 +186,7 @@ func newConfigInitLocalCmd(d Deps) *cobra.Command {
 				return err
 			}
 			if !config.IsAtlassianNetHTTPS(base) {
-				return validationf("ローカル設定の base_url には https の *.atlassian.net の URL だけを指定できる")
+				return validationf("ローカル設定の base_url には https の *.atlassian.net の URL を指定してください")
 			}
 			// email などの空のキーを書かないよう、base_url だけの構造体にする。
 			data, err := yaml.Marshal(struct {
@@ -263,7 +263,7 @@ func newConfigShowCmd(d Deps) *cobra.Command {
 			// 設定が不完全でも場所の確認には使えるため、読み込みのエラーは表示して正常終了する。
 			s, warns, err := config.Load(d.Sources)
 			for _, wn := range warns {
-				fmt.Fprintln(d.Stderr, "Warning: "+wn)
+				fmt.Fprintln(d.Stderr, "warning: "+wn)
 			}
 			if err != nil {
 				fmt.Fprintf(w, "設定を読み込めません: %v\n", err)

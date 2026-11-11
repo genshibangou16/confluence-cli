@@ -19,7 +19,9 @@ import (
 )
 
 // Deps はコマンドが使う外部の資源。テストで設定ファイルの場所・HTTP クライアント・入出力を差し替える。
+// Version は --version で表示する値。
 type Deps struct {
+	Version  string
 	Sources  config.Sources
 	CacheDir string
 	HTTP     *http.Client
@@ -28,10 +30,11 @@ type Deps struct {
 	Stdin    io.Reader
 }
 
-// Execute は実環境の Deps でコマンドを実行し、終了コードを返す。
-func Execute() int {
+// Execute は実環境の Deps でコマンドを実行し、終了コードを返す。version は --version で表示する値。
+func Execute(version string) int {
 	src := config.DefaultSources()
 	d := Deps{
+		Version:  version,
 		Sources:  src,
 		CacheDir: cache.DefaultDir(os.Getenv, src.Home),
 		HTTP:     &http.Client{Timeout: 30 * time.Second},
@@ -73,7 +76,9 @@ func NewRootCmd(d Deps) *cobra.Command {
 		// エラーは run が output.WriteError で出すため、cobra には usage もエラーも出させない。
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		Version:       d.Version,
 	}
+	root.SetVersionTemplate("confluence-cli {{.Version}}\n")
 	root.AddCommand(newSearchCmd(d), newPageCmd(d), newLabelCmd(d), newConfigCmd(d))
 	return root
 }
@@ -88,7 +93,7 @@ func checkFormat(format string, allowed ...string) error {
 			return nil
 		}
 	}
-	return validationf("--format に指定できない値: %q（%v のいずれか）", format, allowed)
+	return validationf("--format に指定できない値です: %q（%v のいずれか）", format, allowed)
 }
 
 // listFlags は一覧系のコマンドに共通のフラグ。
@@ -114,7 +119,7 @@ func (f listFlags) args() (limit int, all bool, err error) {
 		return 0, true, nil
 	}
 	if f.limit <= 0 {
-		return 0, false, validationf("--limit には正の数を指定する")
+		return 0, false, validationf("--limit には正の数を指定してください")
 	}
 	return f.limit, false, nil
 }

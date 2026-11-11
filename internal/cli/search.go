@@ -8,7 +8,6 @@ import (
 
 	"github.com/genshibangou16/confluence-cli/internal/cli/output"
 	"github.com/genshibangou16/confluence-cli/internal/cql"
-	"github.com/genshibangou16/confluence-cli/internal/domain"
 )
 
 const excerptRunes = 60
@@ -58,14 +57,14 @@ func newSearchCmd(d Deps) *cobra.Command {
 				f.Query = args[0]
 			}
 			if f.Query != "" && f.RawCQL != "" {
-				return validationf("検索語と --cql は同時に指定できない")
+				return validationf("検索語と --cql は同時に指定できません")
 			}
 			// --type は既定値を持つため、cql.Build の「条件が無い」検査に掛からない。既定値だけで全ページを検索しないよう、ここで検査する。
 			if f.Query == "" && f.RawCQL == "" && f.SpaceKey == "" && len(f.Labels) == 0 && f.Since == "" && f.Author == "" && !cmd.Flags().Changed("type") {
-				return validationf("検索語、--cql、または絞り込み条件を指定する")
+				return validationf("検索語、--cql、または絞り込み条件を指定してください")
 			}
 			if (title || text) && f.Query == "" {
-				return validationf("--title と --text には検索語が必要")
+				return validationf("--title と --text には検索語を指定してください")
 			}
 			switch {
 			case title:
@@ -81,7 +80,7 @@ func newSearchCmd(d Deps) *cobra.Command {
 			case "modified":
 				f.Sort = cql.SortModified
 			default:
-				return validationf("--sort に指定できない値: %q（relevance, modified のいずれか）", sortBy)
+				return validationf("--sort に指定できない値です: %q（relevance, modified のいずれか）", sortBy)
 			}
 			// --cql の中で type を指定していることがあるため、--cql を使うときは --type を明示した場合だけ連結する。
 			if f.RawCQL != "" && !cmd.Flags().Changed("type") {
@@ -97,24 +96,7 @@ func newSearchCmd(d Deps) *cobra.Command {
 				return err
 			}
 			for _, w := range warns {
-				fmt.Fprintln(d.Stderr, "Warning: "+w)
-			}
-
-			// タイトル検索の結果表には space-id も出す。検索 API は space-id を返さないため、ページ API で補う。
-			var spaceIDs map[domain.PageID]string
-			if title {
-				ids := make([]domain.PageID, 0, len(hits))
-				for _, h := range hits {
-					ids = append(ids, h.ID)
-				}
-				pages, err := app.Tree.Pages(cmd.Context(), ids)
-				if err != nil {
-					return err
-				}
-				spaceIDs = make(map[domain.PageID]string, len(pages))
-				for _, p := range pages {
-					spaceIDs[p.ID] = p.SpaceID
-				}
+				fmt.Fprintln(d.Stderr, "warning: "+w)
 			}
 
 			if lf.format == "json" {
@@ -122,7 +104,7 @@ func newSearchCmd(d Deps) *cobra.Command {
 				for _, h := range hits {
 					j := searchHitJSON{
 						ID: string(h.ID), Title: h.Title, Type: h.Type, SpaceKey: h.SpaceKey,
-						SpaceID: spaceIDs[h.ID], Excerpt: output.CleanExcerpt(h.Excerpt), URL: h.URL,
+						SpaceID: h.SpaceID, Excerpt: output.CleanExcerpt(h.Excerpt), URL: h.URL,
 					}
 					if !h.LastModified.IsZero() {
 						j.LastModified = h.LastModified.Format(time.RFC3339)
@@ -132,6 +114,7 @@ func newSearchCmd(d Deps) *cobra.Command {
 				return output.JSON(d.Stdout, out)
 			}
 
+			// タイトル検索の結果表には space-id も出す。
 			header := []string{"ID", "TITLE", "SPACE", "MODIFIED", "EXCERPT"}
 			if title {
 				header = []string{"ID", "TITLE", "SPACE", "SPACE ID", "MODIFIED", "EXCERPT"}
@@ -140,7 +123,7 @@ func newSearchCmd(d Deps) *cobra.Command {
 			for _, h := range hits {
 				excerpt := output.Truncate(output.CleanExcerpt(h.Excerpt), excerptRunes)
 				if title {
-					rows = append(rows, []string{string(h.ID), h.Title, h.SpaceKey, spaceIDs[h.ID], date(h.LastModified), excerpt})
+					rows = append(rows, []string{string(h.ID), h.Title, h.SpaceKey, h.SpaceID, date(h.LastModified), excerpt})
 				} else {
 					rows = append(rows, []string{string(h.ID), h.Title, h.SpaceKey, date(h.LastModified), excerpt})
 				}

@@ -20,12 +20,12 @@ func resolveToken(run func(string, ...string) ([]byte, error), cmd []string) (st
 	}
 	out, err := run(cmd[0], cmd[1:]...)
 	if err != nil {
-		return "", fail("の実行に失敗した", nil)
+		return "", fail("の実行に失敗しました", nil)
 	}
 	first, _, _ := strings.Cut(string(out), "\n")
 	token := strings.TrimSpace(first)
 	if token == "" {
-		return "", fail("の出力の 1 行目が空", nil)
+		return "", fail("の出力の 1 行目が空です", nil)
 	}
 	return token, nil
 }

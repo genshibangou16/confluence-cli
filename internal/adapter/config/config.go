@@ -119,34 +119,34 @@ func readLocalFile(p string) (data []byte, warn string, ok bool) {
 		return nil, "", false
 	}
 	if li.Mode()&fs.ModeSymlink != 0 {
-		return nil, fmt.Sprintf("ローカル設定 %s はシンボリックリンクのためスキップする", p), false
+		return nil, fmt.Sprintf("ローカル設定 %s はシンボリックリンクのためスキップします", p), false
 	}
 	// FIFO は書き込む側が現れるまで Open が戻らないため、開く前に通常ファイルかを確認する。
 	if !li.Mode().IsRegular() {
-		return nil, fmt.Sprintf("ローカル設定 %s は通常のファイルではないためスキップする", p), false
+		return nil, fmt.Sprintf("ローカル設定 %s は通常のファイルではないためスキップします", p), false
 	}
 	f, err := os.Open(p)
 	if err != nil {
-		return nil, fmt.Sprintf("ローカル設定 %s を開けないためスキップする", p), false
+		return nil, fmt.Sprintf("ローカル設定 %s を開けないためスキップします", p), false
 	}
 	defer f.Close()
 	fi, err := f.Stat()
 	if err != nil {
-		return nil, fmt.Sprintf("ローカル設定 %s の情報を取得できないためスキップする", p), false
+		return nil, fmt.Sprintf("ローカル設定 %s の情報を取得できないためスキップします", p), false
 	}
 	// Lstat と Open の間に差し替えられた場合、開いたファイルは Lstat の結果と別物になる。
 	if !fi.Mode().IsRegular() || !os.SameFile(li, fi) {
-		return nil, fmt.Sprintf("ローカル設定 %s が検査中に変更されたためスキップする", p), false
+		return nil, fmt.Sprintf("ローカル設定 %s が検査中に変更されたためスキップします", p), false
 	}
 	switch {
 	case !ownedByCurrentUser(fi):
-		return nil, fmt.Sprintf("ローカル設定 %s の所有者が実行ユーザーではないためスキップする", p), false
+		return nil, fmt.Sprintf("ローカル設定 %s の所有者が実行ユーザーではないためスキップします", p), false
 	case fi.Mode().Perm()&0o022 != 0:
-		return nil, fmt.Sprintf("ローカル設定 %s にグループまたはその他の書き込み権限があるためスキップする", p), false
+		return nil, fmt.Sprintf("ローカル設定 %s にグループまたはその他の書き込み権限があるためスキップします", p), false
 	}
 	data, err = io.ReadAll(f)
 	if err != nil {
-		return nil, fmt.Sprintf("ローカル設定 %s を読めないためスキップする", p), false
+		return nil, fmt.Sprintf("ローカル設定 %s を読めないためスキップします", p), false
 	}
 	return data, "", true
 }
@@ -159,10 +159,10 @@ func ReadUser(path string) (fc FileConfig, ok bool, err error) {
 	case errors.Is(err, fs.ErrNotExist):
 		return FileConfig{}, false, nil
 	case err != nil:
-		return FileConfig{}, false, validation("ユーザー設定ファイル %s を読めない", path)
+		return FileConfig{}, false, validation("ユーザー設定ファイル %s を読めません", path)
 	}
 	if err := yaml.Unmarshal(data, &fc); err != nil {
-		return FileConfig{}, false, validation("ユーザー設定ファイル %s を解釈できない", path)
+		return FileConfig{}, false, validation("ユーザー設定ファイル %s を解釈できません", path)
 	}
 	return fc, true, nil
 }
@@ -203,19 +203,19 @@ func Load(src Sources) (Settings, []string, error) {
 	warns = append(warns, findWarns...)
 	if localPath != "" {
 		if err := yaml.Unmarshal(localData, &local); err != nil {
-			warns = append(warns, fmt.Sprintf("ローカル設定 %s を解釈できないため無視する", localPath))
+			warns = append(warns, fmt.Sprintf("ローカル設定 %s を解釈できないため無視します", localPath))
 			local = FileConfig{}
 		}
 	}
 	if local.Email != "" || local.APIToken != "" {
-		warns = append(warns, fmt.Sprintf("ローカル設定 %s の email と api_token は読まない。ユーザー設定か環境変数に書く", localPath))
+		warns = append(warns, fmt.Sprintf("ローカル設定 %s の email と api_token は読みません。ユーザー設定か環境変数に書いてください", localPath))
 	}
 	if len(local.APITokenCommand) > 0 {
-		warns = append(warns, fmt.Sprintf("ローカル設定 %s の api_token_command は読まない。ユーザー設定に書く", localPath))
+		warns = append(warns, fmt.Sprintf("ローカル設定 %s の api_token_command は読みません。ユーザー設定に書いてください", localPath))
 	}
 	localBase := local.BaseURL
 	if localBase != "" && !IsAtlassianNetHTTPS(localBase) {
-		warns = append(warns, fmt.Sprintf("ローカル設定 %s の base_url は https の *.atlassian.net だけを採用するため無視する", localPath))
+		warns = append(warns, fmt.Sprintf("ローカル設定 %s の base_url は https の *.atlassian.net だけを採用するため無視します", localPath))
 		localBase = ""
 	}
 
@@ -225,14 +225,14 @@ func Load(src Sources) (Settings, []string, error) {
 		if u, err := url.Parse(localBase); err == nil {
 			host = u.Host
 		}
-		warns = append(warns, fmt.Sprintf("ローカル設定 %s の base_url (%s) を使用する", localPath, host))
+		warns = append(warns, fmt.Sprintf("ローカル設定 %s の base_url (%s) を使用します", localPath, host))
 	}
 	s.BaseURL = first(src.Env("CONFLUENCE_BASE_URL"), user.BaseURL, localBase)
 	s.Email = first(src.Env("CONFLUENCE_EMAIL"), user.Email)
 	s.APIToken = src.Env("CONFLUENCE_API_TOKEN")
 
 	if s.BaseURL == "" {
-		return Settings{}, warns, validation("base_url が未設定（設定ファイルか環境変数 CONFLUENCE_BASE_URL で指定する）")
+		return Settings{}, warns, validation("base_url が未設定です。設定ファイルか環境変数 CONFLUENCE_BASE_URL で指定してください")
 	}
 	if err := ValidateBaseURL(s.BaseURL); err != nil {
 		return Settings{}, warns, err
@@ -240,7 +240,7 @@ func Load(src Sources) (Settings, []string, error) {
 	s.BaseURL = strings.TrimRight(s.BaseURL, "/")
 
 	if s.Email == "" {
-		return Settings{}, warns, validation("email が未設定（設定ファイルか環境変数 CONFLUENCE_EMAIL で指定する）")
+		return Settings{}, warns, validation("email が未設定です。設定ファイルか環境変数 CONFLUENCE_EMAIL で指定してください")
 	}
 
 	if s.APIToken == "" {
@@ -256,7 +256,7 @@ func Load(src Sources) (Settings, []string, error) {
 		}
 	}
 	if s.APIToken == "" {
-		return Settings{}, warns, validation("api_token が未設定（設定ファイル・api_token_command・環境変数 CONFLUENCE_API_TOKEN のいずれかで指定する）")
+		return Settings{}, warns, validation("api_token が未設定です。設定ファイル・api_token_command・環境変数 CONFLUENCE_API_TOKEN のいずれかで指定してください")
 	}
 
 	envRO, warn := parseBool(src.Env("CONFLUENCE_READ_ONLY"))
@@ -283,7 +283,7 @@ func first(vs ...string) string {
 func ValidateBaseURL(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
-		return validation("base_url は認証情報を含まない https の URL だけを指定できる")
+		return validation("base_url には認証情報を含まない https の URL を指定してください")
 	}
 	return nil
 }
@@ -304,7 +304,7 @@ func parseBool(v string) (bool, string) {
 	case "", "0", "false", "no", "off":
 		return false, ""
 	}
-	return true, "CONFLUENCE_READ_ONLY の値を解釈できないため true として扱う"
+	return true, "CONFLUENCE_READ_ONLY の値を解釈できないため true として扱います"
 }
 
 // mergeSpaces は片方だけ指定されていればその値、両方あれば共通部分を返す。

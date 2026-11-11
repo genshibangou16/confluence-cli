@@ -69,10 +69,10 @@ func newPageGetCmd(d Deps) *cobra.Command {
 				return err
 			}
 			if version < 0 {
-				return validationf("--version には正の数を指定する")
+				return validationf("--version には正の数を指定してください")
 			}
 			if cmd.Flags().Changed("section") && strings.TrimSpace(section) == "" {
-				return validationf("--section には見出しを指定する")
+				return validationf("--section には見出しを指定してください")
 			}
 			id, err := domain.ParsePageRef(args[0])
 			if err != nil {

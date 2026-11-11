@@ -424,3 +424,14 @@ func TestPageUpdate_BodyFileTooLarge(t *testing.T) {
 		t.Fatalf("at the limit: code = %d, body = %q, stderr = %s", code, f.body, e.stderr)
 	}
 }
+
+func TestWarningPrefix(t *testing.T) {
+	e, _ := newWriteEnv(t)
+	e.setEnv("CONFLUENCE_READ_ONLY", "maybe")
+	if code := e.run("page", "get", "1", "--format", "storage"); code != 0 {
+		t.Fatalf("code = %d, stderr = %s", code, e.stderr)
+	}
+	if !strings.HasPrefix(e.stderr.String(), "warning: CONFLUENCE_READ_ONLY") {
+		t.Fatalf("stderr = %q", e.stderr)
+	}
+}

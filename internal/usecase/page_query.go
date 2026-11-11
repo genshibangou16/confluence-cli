@@ -71,13 +71,13 @@ func (q *PageQuery) Get(ctx context.Context, id domain.PageID, r GetRequest) (Pa
 			return PageView{}, validationError("未対応の content の形式: %q", r.ContentFormat)
 		}
 	} else if r.ContentFormat != "" {
-		return PageView{}, validationError("content の形式は --format json のときだけ指定できる")
+		return PageView{}, validationError("content の形式は --format json のときだけ指定できます")
 	}
 	if r.Outline && r.Section != "" {
-		return PageView{}, validationError("--outline と --section は同時に指定できない")
+		return PageView{}, validationError("--outline と --section は同時に指定できません")
 	}
 	if r.Outline && r.Format == FormatStorage {
-		return PageView{}, validationError("--outline は --format storage では使えない")
+		return PageView{}, validationError("--outline は --format storage では使えません")
 	}
 	p, err := q.g.GetPage(ctx, id, true, r.Version)
 	if err != nil {
