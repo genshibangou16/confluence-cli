@@ -62,6 +62,9 @@ func (c *PageCommand) Create(ctx context.Context, r CreateRequest) (WriteResult,
 	if err != nil {
 		return WriteResult{}, err
 	}
+	if strings.TrimSpace(r.Body) != "" && strings.TrimSpace(body) == "" {
+		return WriteResult{}, emptyConvertedError()
+	}
 	if err := c.guard.CheckReadOnly(); err != nil {
 		return WriteResult{}, err
 	}
@@ -102,6 +105,12 @@ func toStorage(body string, in InputFormat) (string, error) {
 		return "", &domain.Error{Kind: domain.ErrValidation, Message: err.Error(), Err: err}
 	}
 	return out, nil
+}
+
+// emptyConvertedError は、空でない入力が空の storage 形式に変換されたときのエラー。
+// Markdown のリンク参照定義だけの入力などが該当し、そのまま送ると本文や節の中身が消える。
+func emptyConvertedError() error {
+	return validationError("本文を storage 形式に変換すると空になります。表示される内容を含む本文を指定してください")
 }
 
 // lostWordsInMessage はエラーメッセージに並べる失われた語の上限。残りは語数だけを示す。
@@ -171,6 +180,16 @@ type UpdateRequest struct {
 func (c *PageCommand) Update(ctx context.Context, r UpdateRequest) (WriteResult, error) {
 	if err := validateUpdate(r); err != nil {
 		return WriteResult{}, err
+	}
+	if r.Body != nil {
+		// 現在の本文を取得する前に、入力の誤りと、変換後の本文が空であることを確認する。
+		in, err := toStorage(*r.Body, r.Input)
+		if err != nil {
+			return WriteResult{}, err
+		}
+		if strings.TrimSpace(in) == "" {
+			return WriteResult{}, emptyConvertedError()
+		}
 	}
 	if !r.DryRun {
 		if err := c.guard.CheckReadOnly(); err != nil {

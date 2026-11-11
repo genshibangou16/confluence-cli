@@ -501,3 +501,23 @@ func TestUpdate_MalformedAssembledBodyRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdate_EmptyConvertedBodyRefused(t *testing.T) {
+	// リンク参照定義だけの Markdown は空の storage 形式になる。
+	md := "[a]: http://example.com\n"
+	for name, tc := range map[string]struct {
+		mode    UpdateMode
+		section string
+	}{
+		"replace": {ModeReplace, ""},
+		"append":  {ModeAppend, ""},
+		"prepend": {ModePrepend, ""},
+		"section": {ModeSection, "A"},
+	} {
+		c, s := newUpdateCommand(WritePolicy{}, "<h2>A</h2><p>a</p>")
+		_, err := c.Update(context.Background(), UpdateRequest{ID: "20", Body: ptr(md), Input: InputMarkdown, Mode: tc.mode, Section: tc.section})
+		if domain.KindOf(err) != domain.ErrValidation || s.gets != 0 || s.updates != 0 {
+			t.Errorf("%s: err = %v gets = %d updates = %d", name, err, s.gets, s.updates)
+		}
+	}
+}

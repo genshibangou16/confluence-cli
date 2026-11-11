@@ -220,3 +220,18 @@ func TestDelete_NotFound(t *testing.T) {
 		t.Fatalf("err = %v, deletes = %d", err, w.deletes)
 	}
 }
+
+func TestCreate_EmptyConvertedBodyRefused(t *testing.T) {
+	c, g, w := newCommand(WritePolicy{})
+	_, err := c.Create(context.Background(), CreateRequest{ParentID: "10", Title: "t", Body: "[a]: http://example.com\n", Input: InputMarkdown})
+	if domain.KindOf(err) != domain.ErrValidation || w.creates != 0 || len(g.calls) != 0 {
+		t.Fatalf("err = %v creates = %d gets = %v", err, w.creates, g.calls)
+	}
+}
+
+func TestCreate_NoBodyAllowed(t *testing.T) {
+	c, _, w := newCommand(WritePolicy{})
+	if _, err := c.Create(context.Background(), CreateRequest{SpaceID: "100", Title: "t", Input: InputMarkdown}); err != nil || w.creates != 1 {
+		t.Fatalf("err = %v creates = %d", err, w.creates)
+	}
+}
