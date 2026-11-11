@@ -155,9 +155,71 @@ func TestConvert_EscapesText(t *testing.T) {
 }
 
 func TestConvert_DropsCharsInvalidInXML(t *testing.T) {
-	got := mustConvert(t, "a\x01b &#1; c\n\n```\nx\x02y\n```\n")
+	got := mustConvert(t, "a\x01b &#1; c\x00d\n\n```\nx\x02y\n```\n")
+	want := "<p>ab  cd</p>\n" + `<ac:structured-macro ac:name="code" ac:schema-version="1">` + "\n<ac:plain-text-body><![CDATA[xy]]></ac:plain-text-body>\n</ac:structured-macro>\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// 入力の制御文字を除いた結果で "]]>" ができても、CDATA の分割で本文に戻る。
+func TestConvert_InvalidCharInsideCDATAEnd(t *testing.T) {
+	got := mustConvert(t, "```\n]]\x01>\n```\n")
 	if err := storage.Validate(got); err != nil {
-		t.Errorf("Validate: %v\n%q", err, got)
+		t.Fatalf("Validate: %v\n%s", err, got)
+	}
+	md, err := tomd.Convert(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "```\n]]>\n```\n"; md != want {
+		t.Errorf("got %q, want %q", md, want)
+	}
+}
+
+func TestConvert_DangerousURLs(t *testing.T) {
+	for _, dest := range []string{"&#106;avascript:alert(1)", "JaVaScRiPt:alert(1)", "vbscript:msgbox(1)", "data:text/html,x"} {
+		for _, md := range []string{"[x](" + dest + ")\n", "![x](" + dest + ")\n"} {
+			got := mustConvert(t, md)
+			if strings.Contains(got, "href") || strings.Contains(got, "ri:url") {
+				t.Errorf("%q: 危険な URL がリンクになっている: %q", md, got)
+			}
+		}
+	}
+	if got := mustConvert(t, "<javascript:alert(1)>\n"); strings.Contains(got, "href") {
+		t.Errorf("自動リンク: %q", got)
+	}
+}
+
+func TestConvert_SoftLineBreak(t *testing.T) {
+	for md, want := range map[string]string{
+		"これは長い文で\n途中で折り返す。\n": "<p>これは長い文で途中で折り返す。</p>\n",
+		"English\nline\n": "<p>English line</p>\n",
+		// 両側が東アジアの全角文字のときだけ空白を入れない。片側が英字なら空白を入れる。
+		"日本語\nEnglish\n": "<p>日本語 English</p>\n",
+		"日本語\n**太字**\n":  "<p>日本語<strong>太字</strong></p>\n",
+	} {
+		if got := mustConvert(t, md); got != want {
+			t.Errorf("%q: got %q, want %q", md, got, want)
+		}
+	}
+}
+
+func TestConvert_CRLF(t *testing.T) {
+	got := mustConvert(t, "```go\r\nx\r\ny\r\n```\r\n\r\npara\r\nnext\r\n")
+	want := `<ac:structured-macro ac:name="code" ac:schema-version="1">` + "\n" + `<ac:parameter ac:name="language">go</ac:parameter>` +
+		"\n<ac:plain-text-body><![CDATA[x\ny]]></ac:plain-text-body>\n</ac:structured-macro>\n<p>para next</p>\n"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestConvert_OrderedListStart(t *testing.T) {
+	if got := mustConvert(t, "3. a\n4. b\n"); !strings.HasPrefix(got, `<ol start="3">`) {
+		t.Errorf("got %q", got)
+	}
+	if got := mustConvert(t, "1. a\n"); !strings.HasPrefix(got, "<ol>\n") {
+		t.Errorf("got %q", got)
 	}
 }
 

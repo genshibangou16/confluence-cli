@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/yuin/goldmark/ast"
 	east "github.com/yuin/goldmark/extension/ast"
@@ -32,10 +33,13 @@ func (r *renderer) write(ss ...string) {
 
 // writeText は Markdown のテキストを XHTML のテキストとして書く。
 // バックスラッシュのエスケープと文字参照の解決は goldmark の HTML レンダラーと同じ処理を使い、&・<・>・" をエスケープする。
+// "&#1;" のような文字参照は解決すると XML で使えない文字になるため、書く前に除く。
 func (r *renderer) writeText(v []byte) {
-	w := bufio.NewWriter(&r.buf)
+	var b bytes.Buffer
+	w := bufio.NewWriter(&b)
 	html.DefaultWriter.Write(w, v)
 	_ = w.Flush()
+	r.buf.WriteString(dropInvalidXMLChars(b.String()))
 }
 
 // writeEscaped は v を解釈せずに XHTML のテキストとしてエスケープして書く。
@@ -173,11 +177,14 @@ func (r *renderer) list(n *ast.List) {
 		r.taskList(n)
 		return
 	}
-	tag := "ul"
+	tag, open := "ul", "<ul>\n"
 	if n.IsOrdered() {
-		tag = "ol"
+		tag, open = "ol", "<ol>\n"
+		if n.Start != 1 {
+			open = `<ol start="` + strconv.Itoa(n.Start) + `">` + "\n"
+		}
 	}
-	r.write("<", tag, ">\n")
+	r.write(open)
 	for li := n.FirstChild(); li != nil; li = li.NextSibling() {
 		r.write("<li>")
 		r.blocks(li)
@@ -263,7 +270,7 @@ func (r *renderer) inline(n ast.Node) {
 		}
 		if n.HardLineBreak() {
 			r.write("<br />")
-		} else if n.SoftLineBreak() {
+		} else if n.SoftLineBreak() && !joinsWithoutSpace(n, r.src) {
 			r.write(" ")
 		}
 	case *ast.String:
@@ -322,13 +329,15 @@ func (r *renderer) inline(n ast.Node) {
 }
 
 // link は dest へのリンクを書く。javascript: などの危険な URL はリンクにせず、表示テキストだけを書く。
+// 危険かどうかは、"&#106;avascript:" のような文字参照を解決した後の URL で判定する。
 func (r *renderer) link(dest []byte, label func()) {
-	if html.IsDangerousURL(dest) {
+	u := util.URLEscape(dest, true)
+	if html.IsDangerousURL(u) {
 		label()
 		return
 	}
 	r.write(`<a href="`)
-	r.writeEscaped(util.URLEscape(dest, true))
+	r.writeEscaped(u)
 	r.write(`">`)
 	label()
 	r.write("</a>")
@@ -356,6 +365,40 @@ func (r *renderer) image(n *ast.Image) {
 	r.write(`><ri:url ri:value="`)
 	r.writeEscaped(util.URLEscape(n.Destination, true))
 	r.write(`" /></ac:image>`)
+}
+
+// joinsWithoutSpace は、ソフト改行の前の文字と後の文字がどちらも東アジアの全角文字かを返す。
+// 日本語の文の途中の改行を空白にすると、Confluence の表示で文の途中に空白が入るため、両側が全角文字のときは空白を入れずにつなげる。
+// 判定は goldmark の EastAsianLineBreaksSimple と同じ。
+func joinsWithoutSpace(t *ast.Text, src []byte) bool {
+	v := t.Segment.Value(src)
+	if len(v) == 0 {
+		return false
+	}
+	next := firstRune(t.NextSibling(), src)
+	return next >= 0 && util.IsEastAsianWideRune(util.ToRune(v, len(v)-1)) && util.IsEastAsianWideRune(next)
+}
+
+// firstRune は n から後ろの兄弟と子孫をたどって、最初に現れるテキストの先頭の文字を返す。テキストがなければ -1 を返す。
+func firstRune(n ast.Node, src []byte) rune {
+	for ; n != nil; n = n.NextSibling() {
+		var v []byte
+		switch c := n.(type) {
+		case *ast.Text:
+			v = c.Segment.Value(src)
+		case *ast.String:
+			v = c.Value
+		default:
+			if r := firstRune(n.FirstChild(), src); r >= 0 {
+				return r
+			}
+		}
+		if len(v) > 0 {
+			r, _ := utf8.DecodeRune(v)
+			return r
+		}
+	}
+	return -1
 }
 
 // plainText は n の子孫のテキストを装飾を除いてつなげる。

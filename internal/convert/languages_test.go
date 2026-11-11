@@ -8,6 +8,7 @@ func TestNormalizeLanguage(t *testing.T) {
 		"py": "python", "python3": "python", "js": "javascript", "node": "javascript", "ts": "typescript",
 		"yml": "yaml", "html": "html/xml", "c++": "cpp", "cs": "csharp", "C#": "c#", "Go": "go",
 		"java": "java", "html/xml": "html/xml", "sql": "sql", "foo": "text",
+		"rb": "ruby", "kt": "kotlin", "rs": "rust", "erlang": "erl",
 	} {
 		if got := NormalizeLanguage(in); got != want {
 			t.Errorf("NormalizeLanguage(%q) = %q, want %q", in, got, want)

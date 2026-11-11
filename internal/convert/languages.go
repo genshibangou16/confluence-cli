@@ -24,6 +24,7 @@ var languageAliases = map[string]string{
 	"html": "html/xml",
 	"c++":  "cpp",
 	"cs":   "csharp",
+	"rb":   "ruby", "kt": "kotlin", "rs": "rust", "erlang": "erl",
 }
 
 // NormalizeLanguage は Markdown のフェンスの言語名を Confluence の code マクロの言語名にする。

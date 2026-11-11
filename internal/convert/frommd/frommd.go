@@ -3,6 +3,8 @@
 package frommd
 
 import (
+	"strings"
+
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/text"
@@ -13,11 +15,12 @@ import (
 // Convert は Markdown を storage 形式に変換する。
 // 出力が整形式でなければ *storage.SyntaxError を返す。
 func Convert(md string) (string, error) {
-	src := []byte(md)
+	// 改行を LF にそろえ、XML で使えない文字を入力の段階で除く。出力で除くと、"]]\x01>" が CDATA の外で "]]>" になる。
+	src := []byte(dropInvalidXMLChars(strings.ReplaceAll(md, "\r\n", "\n")))
 	r := &renderer{src: src}
 	p := goldmark.New(goldmark.WithExtensions(extension.Table, extension.Strikethrough, extension.TaskList)).Parser()
 	r.blocks(p.Parse(text.NewReader(src)))
-	out := dropInvalidXMLChars(r.buf.String())
+	out := r.buf.String()
 	if err := storage.Validate(out); err != nil {
 		return "", err
 	}
