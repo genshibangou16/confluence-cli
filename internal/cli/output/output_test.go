@@ -2,6 +2,7 @@ package output
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -133,5 +134,51 @@ func TestSanitizeMultiline(t *testing.T) {
 	got := SanitizeMultiline("a\x1b[31mb\n\tc\u202ed\u0085e")
 	if got != "a [31mb\n\tcd e" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// 端末の表示を変えうる C1 制御文字と双方向制御文字を並べた文字列。
+const terminalControls = "a\u0080b\u009bc\u061Cd\u200Ee\u200Ff\u202Ag\u202Eh\u2066i\u2069j\u00A0k"
+
+func hasTerminalControls(s string) bool {
+	for _, r := range s {
+		if (r >= 0x80 && r <= 0x9F) || r == 0x061C || r == 0x200E || r == 0x200F ||
+			(r >= 0x202A && r <= 0x202E) || (r >= 0x2066 && r <= 0x2069) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestJSON_EscapesTerminalControls(t *testing.T) {
+	var buf bytes.Buffer
+	in := map[string]string{terminalControls: terminalControls}
+	if err := JSON(&buf, in); err != nil {
+		t.Fatal(err)
+	}
+	if hasTerminalControls(buf.String()) || !strings.Contains(buf.String(), `\u009b`) || !strings.Contains(buf.String(), `\u202e`) {
+		t.Fatalf("got %q", buf.String())
+	}
+	var out map[string]string
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out[terminalControls] != terminalControls {
+		t.Fatalf("decoded %q", out)
+	}
+}
+
+func TestWriteError_JSONEscapesTerminalControls(t *testing.T) {
+	var buf bytes.Buffer
+	WriteError(&buf, &domain.Error{Kind: domain.ErrAPI, Message: terminalControls, Hint: terminalControls}, true)
+	if hasTerminalControls(buf.String()) {
+		t.Fatalf("got %q", buf.String())
+	}
+	var out ErrorJSON
+	if err := json.Unmarshal(buf.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Error.Message != terminalControls || out.Error.Hint != terminalControls {
+		t.Fatalf("decoded %+v", out)
 	}
 }
