@@ -33,3 +33,13 @@ type LabelReader interface {
 	PageLabels(ctx context.Context, id domain.PageID, limit int, all bool) ([]domain.Label, error)
 	PagesWithLabel(ctx context.Context, labelID, spaceID string, limit int, all bool) ([]domain.PageSummary, error)
 }
+
+type PageWriter interface {
+	CreatePage(ctx context.Context, spaceID string, parentID domain.PageID, title, storage string) (domain.Page, error)
+	UpdatePage(ctx context.Context, id domain.PageID, title, storage string, version int, message string) (domain.Page, error)
+	DeletePage(ctx context.Context, id domain.PageID) error
+}
+
+type SpaceIDFinder interface {
+	SpaceByID(ctx context.Context, id string) (domain.Space, error)
+}
