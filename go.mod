@@ -3,6 +3,7 @@ module github.com/genshibangou16/confluence-cli
 go 1.27
 
 require (
+	github.com/aymanbagabas/go-udiff v0.4.1
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.8.7
 	golang.org/x/term v0.48.0
