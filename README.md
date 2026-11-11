@@ -148,12 +148,14 @@ confluence-cli page delete <page>
 - `--dry-run` は更新せず、現在の本文と新しい本文の差分を出す。書き込まないため、`read_only` と `writable_spaces` では拒否しない。
 - 本文全体か `--section` の節を置き換えるときに、置き換える範囲のインラインコメントのマーカーが新しい本文に残らなければ、`--allow-drop-comments` を付けない限り更新しない。storage 形式の入力では、同じ `ac:ref` のマーカーを新しい本文に含めればマーカーは残る。Markdown の入力ではマーカーを表せないため、範囲のマーカーはすべて外れる。
 - Markdown の入力で本文全体か `--section` の節を置き換えるときに、置き換える範囲に Markdown で表せない要素があれば、`--allow-lossy` を付けない限り更新しない。
-- `page create` と `page update` は、更新後に本文を取得し直し、送った本文から失われたテキストがあればページの情報を出してからエラーで終了する。
-- `--format json` は、失敗時の標準エラーにも JSON を出す。
+- 入力を storage 形式にした結果が空になる本文（Markdown のリンク参照定義だけなど）では、作成も更新もしない。
+- `--append`・`--prepend`・`--section` で足す Markdown のタスクには、現在の本文のタスクと重ならない `ac:task-id` を振る。
+- `page create` と `page update` は、更新後に書き込んだ版の本文を取得し直し、送った本文から失われたテキストがあればページの情報を出してからエラーで終了する。
+- `--format json` は、失敗時の標準エラーにも JSON を出す。警告はテキストで出さず、失敗時はエラーの JSON の `warnings` に入れ、成功時は `{"warnings":[...]}` の 1 行を標準エラーに出す。
 
 ### エラー
 
-失敗したときの終了コードは常に 1。標準エラーには `Error: <メッセージ>` を出し、対処方法があれば `Hint: <対処方法>` を続ける。`--format json` のコマンドでは `{"error":{"kind":...,"status":...,"message":...,"hint":...}}` を出す。`kind` は次のいずれか。
+失敗したときの終了コードは常に 1。標準エラーには `Error: <メッセージ>` を出し、対処方法があれば `Hint: <対処方法>` を続ける。`--format json` のコマンドでは `{"error":{"kind":...,"status":...,"message":...,"hint":...},"warnings":[...]}` を出す（`warnings` は警告があるときだけ）。`kind` は次のいずれか。
 
 | kind | 意味 |
 | --- | --- |

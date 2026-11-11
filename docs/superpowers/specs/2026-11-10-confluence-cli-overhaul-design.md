@@ -94,6 +94,8 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
 - 429 と 503 には、`Retry-After` の秒数だけ待ってリトライする。`Retry-After` がなければ jitter 付きの指数バックオフでリトライする。リトライの対象は GET・PUT・DELETE とし、POST（ページ作成とラベル付与）はリトライしない。
 - 401・403 のエラーメッセージで、API トークンの失効（有効期限は最長 1 年）とスコープ不足を原因の候補として案内する。スコープ付きトークンでは、v1 API（検索・ラベル）に classic スコープ（`search:confluence`、`write:confluence-content` など）が要る。呼び出した API に必要なスコープ名をメッセージに含める。必要なスコープの正確な名前は公式ドキュメントで確認してから実装する。
 - 設定に `api_token_command` を追加する。指定すると、そのコマンドをシェルを介さずに実行し、標準出力の 1 行目を API トークンとして使う（例: macOS のキーチェーンから取り出す `security find-generic-password -s confluence-cli -w`）。`api_token` と両方あれば `api_token_command` を優先する。ローカル設定の `api_token_command` は読まない（`api_token` と同じ理由）。
+- HTTP のリダイレクトは、`https` で最初のリクエストと同じホスト（ポートを含む）へのものだけをたどる。それ以外はたどらずにエラーにする。`net/http` は、`http` へのリダイレクトや、ポートだけが違う同じホスト名へのリダイレクトでも `Authorization` ヘッダーを送り直すため。
+- 警告と、`config show`・`config path` が出す設定ファイルのパスと値は、テキストで出すときに制御文字を除く。設定ファイルとディレクトリの名前に ESC などを含められるため。
 - `--format json` とエラーの JSON の出力では、C1 制御文字（U+0080〜U+009F）と双方向制御文字（U+061C、U+200E、U+200F、U+202A〜U+202E、U+2066〜U+2069）を `\uXXXX` にエスケープする。encoding/json はこれらの文字をそのまま出力し、端末に表示すると Confluence 由来の文字列で端末の表示を変えられるため。デコードすると元の文字列に戻る。
 - 書き込みを制限する設定を追加する。
   - `read_only: true`（環境変数 `CONFLUENCE_READ_ONLY=1`）: 書き込み系のコマンド（create・update・delete・label add/remove）を、API を呼ばずにエラーで終了させる。
@@ -120,6 +122,8 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
   - 見出し・段落・リスト・リンク・強調・テーブルは、Markdown の対応する記法にする。
   - code マクロはフェンス付きコードブロックにする（言語指定を引き継ぐ）。
   - info・note・warning・tip パネルは、書き込み時と同じ対応表で GitHub Alerts（`> [!NOTE]` など）にする。info→NOTE、tip→TIP、note→WARNING、warning→CAUTION。パネルのタイトルは Alert の 1 行目に残す。
+  - 段落の中にあるパネルは `[NOTE: **タイトル** 本文]`、code マクロは `[code title=タイトル]` の後に空白とインラインコードを続けた形（タイトルがなければインラインコードだけ）にする。
+  - 見出しの中の `<br/>` は空白にする。`--outline` と `--section` が比べる見出しの文字列でも空白として扱う。
   - タスクリストは `- [ ]` / `- [x]` にする。
   - ユーザーへのメンションは accountId を残した形にする。
   - 画像と添付ファイルはファイル名を残す。
@@ -132,6 +136,7 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
 - `create`・`update` の成功時の出力を、ID・タイトル・版番号・URL だけにする。`--format json` で全体を出せるようにする。
 - `--format json` の出力から、ページング用の `_links.next` など、読み手が使わないフィールドを除く。
 - `--format json` を指定したコマンドが失敗したら、標準エラーに JSON を 1 つだけ出す。JSON には、エラーの種類（`auth`・`not_found`・`conflict`・`validation`・`rate_limit`・`read_only` など）、HTTP ステータス、メッセージを含める。
+- `--format json` を指定したコマンドは、警告をテキストで出さない。失敗したときはエラーの JSON の `warnings` に入れる。成功したときは、警告があれば `{"warnings":[...]}` の 1 行を標準エラーに出す。
 
 **更新の正確さ**
 
@@ -146,7 +151,7 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
   - 見出し・段落・強調・取り消し線・インラインコード・リンク・リスト・テーブル・水平線・引用は、対応する XHTML 要素にする。外部 URL の画像は `ac:image` + `ri:url` にする。
   - フェンス付きコードブロックは code マクロにし、本文を CDATA で囲む。言語指定を `language` パラメータにする。言語名の別名は Confluence の言語名に置き換える（`sh`・`zsh`・`shell`→`bash`、`golang`→`go`、`py`・`python3`→`python`、`js`→`javascript`、`ts`→`typescript`、`yml`→`yaml` など）。Confluence が知らない言語名は `text` にする。本文に `]]>` が含まれる場合は CDATA を分割する。
   - GitHub Alerts は、NOTE→info、IMPORTANT→info、TIP→tip、WARNING→note（黄）、CAUTION→warning（赤）のパネルマクロにする。Confluence の `warning` マクロは赤、`note` マクロは黄色で、GitHub の WARNING（黄）・CAUTION（赤）と色を合わせるため。`[!TYPE]` のない普通の引用は blockquote のまま残す。
-  - タスクリストは `ac:task-list` にし、`ac:task-id` に 1 からの連番を振る。
+  - タスクリストは `ac:task-list` にし、`ac:task-id` に 1 からの連番を振る。`--append`・`--prepend`・`--section` では、現在の本文の `ac:task-id` の最大値の次から振る。
   - 単独行の `[TOC]` は toc マクロにする。
   - 生の HTML は送らずにエスケープする（Markdown 中の HTML タグが storage 形式に混入しない）。
 - `page update` に部分更新のオプションを追加する。どれも、指定しなかった部分の storage 形式を一切変えずに残す。
@@ -157,8 +162,9 @@ confluence-cli は、利用者本人と Claude（confluence-cli スキル経由�
   - `--section` の範囲の終わりは、同じかより上位のレベルの次の見出しの直前とする。ただし、その見出しがマクロ（expand・excerpt など）や `ac:layout-section` の中にある場合は、そのマクロや layout の要素の開始位置を範囲の終わりにする。
 - 本文を置き換える範囲（全体の置き換えでは本文全体、`--section` では対象の節）に、インラインコメントのマーカー（`ac:inline-comment-marker`）があれば、更新せずにエラーで終了し、コメントが外れることを案内する。`--allow-drop-comments` を付けたときだけ更新する。`--dry-run` ではエラーにせず警告を出す。
 - `--input-format markdown` で本文全体を置き換えるとき、既存の本文に Markdown の変換規則で表せない要素（変換規則のないマクロ、`ac:layout`、結合セルのあるテーブルなど）があれば、更新せずにエラーで終了し、失われる要素の一覧を示す。`--allow-lossy` を付けたときだけ更新する。
-- 更新と作成の後に、本文を取得し直して送った本文と比べる。テキストが失われていれば、失われたテキストを標準エラーに出し、終了コードを 0 以外にする。Confluence による属性の正規化（`ac:macro-id` の付与など）だけの差は報告しない。
-- 送信前に、本文の storage 形式が XML として整形式かを確認する。storage 形式はそのままでは整形式の XML ではない（`ac:`・`ri:` の名前空間が宣言されておらず、`&nbsp;` などの HTML の実体参照を含む）。このため、名前空間を宣言したルート要素で包み、`encoding/xml` の `Decoder.Entity` に `xml.HTMLEntity` を設定してから検証する。整形式でなければ、行と列を示してエラーで終了し、API を呼ばない。`--input-format markdown` で変換した結果にも同じ確認を行う。
+- 入力を storage 形式にした結果が空（空白だけを含む）なら、API を呼ばずにエラーで終了する。対象は `page update` のすべての更新方法と、本文を指定した `page create`。Markdown のリンク参照定義だけの入力などは空の storage 形式になり、そのまま送ると本文や節の中身が消えるため。
+- 更新と作成の後に、書き込みの応答の版番号を指定して本文を取得し直し、送った本文と比べる。応答に版番号がなければ最新版を取得する。テキストが失われていれば、失われたテキストを標準エラーに出し、終了コードを 0 以外にする。Confluence による属性の正規化（`ac:macro-id` の付与など）だけの差は報告しない。
+- 送信前に、本文の storage 形式が XML として整形式かを確認する。storage 形式はそのままでは整形式の XML ではない（`ac:`・`ri:` の名前空間が宣言されておらず、`&nbsp;` などの HTML の実体参照を含む）。このため、名前空間を宣言したルート要素で包み、`encoding/xml` の `Decoder.Entity` に `xml.HTMLEntity` を設定してから検証する。整形式でなければ、行と列を示してエラーで終了し、API を呼ばない。`--input-format markdown` で変換した結果にも同じ確認を行う。本文が `</root>` で包んだルート要素を閉じる場合も整形式でないとする。`--append`・`--prepend`・`--section` では、組み立てた本文全体も送る前に確認する。
 
 **新規コマンド**
 
@@ -266,7 +272,7 @@ E2E テストでは、書式の多い合成フィクスチャ（`testdata/storag
 
 **エラー**
 
-- 失敗時の終了コードは 1。`--format json` のコマンドでは、標準エラーに `{"error":{"kind":...,"status":...,"message":...,"hint":...}}` を出す。
+- 失敗時の終了コードは 1。`--format json` のコマンドでは、標準エラーに `{"error":{"kind":...,"status":...,"message":...,"hint":...},"warnings":[...]}` を出す（`warnings` は警告があるときだけ）。成功時に警告があれば、標準エラーに `{"warnings":[...]}` を出す。
 - `kind` は `auth`・`forbidden`・`not_found`・`conflict`・`validation`・`rate_limit`・`read_only`・`version_mismatch`・`lossy`・`comment_loss`・`verify_failed`・`api` のいずれか。
 - `verify_failed` は、書き込みは完了したが、書き込み後に読み戻した本文の確認で失敗したことを表す。ページは作成・更新されているため、`page create` をやり直すと同じページが 2 つできる。やり直さずに、出力されたページを確認する。
 
