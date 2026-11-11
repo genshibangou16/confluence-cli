@@ -20,7 +20,9 @@ func Convert(md string) (string, error) {
 	r := &renderer{src: src}
 	p := goldmark.New(goldmark.WithExtensions(extension.Table, extension.Strikethrough, extension.TaskList)).Parser()
 	r.blocks(p.Parse(text.NewReader(src)))
-	out := r.buf.String()
+	// ブロックの後ろに付ける区切りの改行は、出力の末尾では残さない。Confluence は本文全体の末尾の改行を保存時に削除するため、
+	// 末尾に追記したときに読み戻した本文が送った本文と一致しなくなる。
+	out := strings.TrimRight(r.buf.String(), "\n")
 	if err := storage.Validate(out); err != nil {
 		return "", err
 	}

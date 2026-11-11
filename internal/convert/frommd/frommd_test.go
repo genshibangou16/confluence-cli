@@ -67,12 +67,12 @@ func TestConvert_OutputIsWellFormed(t *testing.T) {
 func TestConvert_AlertMapping(t *testing.T) {
 	for kind, macro := range map[string]string{"NOTE": "info", "IMPORTANT": "info", "TIP": "tip", "WARNING": "note", "CAUTION": "warning"} {
 		got := mustConvert(t, "> [!"+kind+"]\n> 本文\n")
-		want := `<ac:structured-macro ac:name="` + macro + `" ac:schema-version="1">` + "<ac:rich-text-body>\n<p>本文</p>\n</ac:rich-text-body></ac:structured-macro>\n"
+		want := `<ac:structured-macro ac:name="` + macro + `" ac:schema-version="1">` + "<ac:rich-text-body>\n<p>本文</p>\n</ac:rich-text-body></ac:structured-macro>"
 		if got != want {
 			t.Errorf("%s: got %q, want %q", kind, got, want)
 		}
 	}
-	if got, want := mustConvert(t, "> 普通の引用\n"), "<blockquote>\n<p>普通の引用</p>\n</blockquote>\n"; got != want {
+	if got, want := mustConvert(t, "> 普通の引用\n"), "<blockquote>\n<p>普通の引用</p>\n</blockquote>"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 	// [!TYPE] が最初の段落の 1 行目の全体でなければパネルにしない。
@@ -149,14 +149,14 @@ func TestConvert_Images(t *testing.T) {
 
 func TestConvert_EscapesText(t *testing.T) {
 	got := mustConvert(t, "a & b < c > d [x](https://example.com/?a=1&b=\"2\")\n")
-	if want := `<p>a &amp; b &lt; c &gt; d <a href="https://example.com/?a=1&amp;b=%222%22">x</a></p>` + "\n"; got != want {
+	if want := `<p>a &amp; b &lt; c &gt; d <a href="https://example.com/?a=1&amp;b=%222%22">x</a></p>`; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
 func TestConvert_DropsCharsInvalidInXML(t *testing.T) {
 	got := mustConvert(t, "a\x01b &#1; c\x00d\n\n```\nx\x02y\n```\n")
-	want := "<p>ab  cd</p>\n" + `<ac:structured-macro ac:name="code" ac:schema-version="1">` + "<ac:plain-text-body><![CDATA[xy]]></ac:plain-text-body></ac:structured-macro>\n"
+	want := "<p>ab  cd</p>\n" + `<ac:structured-macro ac:name="code" ac:schema-version="1">` + "<ac:plain-text-body><![CDATA[xy]]></ac:plain-text-body></ac:structured-macro>"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -193,11 +193,11 @@ func TestConvert_DangerousURLs(t *testing.T) {
 
 func TestConvert_SoftLineBreak(t *testing.T) {
 	for md, want := range map[string]string{
-		"これは長い文で\n途中で折り返す。\n": "<p>これは長い文で途中で折り返す。</p>\n",
-		"English\nline\n": "<p>English line</p>\n",
+		"これは長い文で\n途中で折り返す。\n": "<p>これは長い文で途中で折り返す。</p>",
+		"English\nline\n": "<p>English line</p>",
 		// 両側が東アジアの全角文字のときだけ空白を入れない。片側が英字なら空白を入れる。
-		"日本語\nEnglish\n": "<p>日本語 English</p>\n",
-		"日本語\n**太字**\n":  "<p>日本語<strong>太字</strong></p>\n",
+		"日本語\nEnglish\n": "<p>日本語 English</p>",
+		"日本語\n**太字**\n":  "<p>日本語<strong>太字</strong></p>",
 	} {
 		if got := mustConvert(t, md); got != want {
 			t.Errorf("%q: got %q, want %q", md, got, want)
@@ -208,7 +208,7 @@ func TestConvert_SoftLineBreak(t *testing.T) {
 func TestConvert_CRLF(t *testing.T) {
 	got := mustConvert(t, "```go\r\nx\r\ny\r\n```\r\n\r\npara\r\nnext\r\n")
 	want := `<ac:structured-macro ac:name="code" ac:schema-version="1">` + `<ac:parameter ac:name="language">go</ac:parameter>` +
-		"<ac:plain-text-body><![CDATA[x\ny]]></ac:plain-text-body></ac:structured-macro>\n<p>para next</p>\n"
+		"<ac:plain-text-body><![CDATA[x\ny]]></ac:plain-text-body></ac:structured-macro>\n<p>para next</p>"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -230,8 +230,17 @@ func TestConvert_Empty(t *testing.T) {
 }
 
 func TestConvert_TOC(t *testing.T) {
-	want := `<ac:structured-macro ac:name="toc" ac:schema-version="1"><ac:parameter ac:name="maxLevel">3</ac:parameter></ac:structured-macro>` + "\n"
+	want := `<ac:structured-macro ac:name="toc" ac:schema-version="1"><ac:parameter ac:name="maxLevel">3</ac:parameter></ac:structured-macro>`
 	if got := mustConvert(t, "[TOC]\n"); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// Confluence は本文全体の末尾の改行を保存時に削除するため、出力は改行で終えない。ブロックの間の改行は残す。
+func TestConvert_NoTrailingNewline(t *testing.T) {
+	got := mustConvert(t, "段落 1\n\n段落 2\n\n```\nx\n```\n")
+	want := "<p>段落 1</p>\n<p>段落 2</p>\n" + `<ac:structured-macro ac:name="code" ac:schema-version="1"><ac:plain-text-body><![CDATA[x]]></ac:plain-text-body></ac:structured-macro>`
+	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
