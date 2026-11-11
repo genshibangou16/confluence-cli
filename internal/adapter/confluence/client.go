@@ -17,7 +17,7 @@ import (
 const defaultMaxAttempts = 4
 
 // Options は Client の生成パラメーター。Root はサイトの root で、/wiki を含まない。
-// HTTP・Sleep・MaxAttempts は省略するとそれぞれ既定値（タイムアウト 30 秒の http.Client、
+// HTTP・Sleep・MaxAttempts は省略するとそれぞれ既定値（タイムアウト 30 秒の NewHTTPClient、
 // ctx のキャンセルで中断する待機、4 回）になる。Sleep はテストでリトライの待機を差し替えるために公開している。
 type Options struct {
 	Root        string
@@ -46,7 +46,7 @@ func New(o Options) *Client {
 		maxAttempts: o.MaxAttempts,
 	}
 	if c.http == nil {
-		c.http = &http.Client{Timeout: 30 * time.Second}
+		c.http = NewHTTPClient(30 * time.Second)
 	}
 	if o.Sleep != nil {
 		sleep := o.Sleep

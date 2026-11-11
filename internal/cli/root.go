@@ -15,6 +15,7 @@ import (
 
 	"github.com/genshibangou16/confluence-cli/internal/adapter/cache"
 	"github.com/genshibangou16/confluence-cli/internal/adapter/config"
+	"github.com/genshibangou16/confluence-cli/internal/adapter/confluence"
 	"github.com/genshibangou16/confluence-cli/internal/cli/output"
 	"github.com/genshibangou16/confluence-cli/internal/domain"
 )
@@ -56,7 +57,7 @@ func Execute(version string) int {
 		Version:  version,
 		Sources:  src,
 		CacheDir: cache.DefaultDir(os.Getenv, src.Home),
-		HTTP:     &http.Client{Timeout: 30 * time.Second},
+		HTTP:     confluence.NewHTTPClient(30 * time.Second),
 		Stdout:   os.Stdout,
 		Stderr:   os.Stderr,
 		Stdin:    os.Stdin,
